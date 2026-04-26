@@ -26,12 +26,18 @@
     {% for c in clientes %}
     <div class="client-card {% if c.dias_em_atraso > 0 %}atraso{% endif %}" data-nome="{{ c.nome|lower }}">
       <div class="client-card-header">
-        <div>
-          <div class="client-card-name">{{ c.nome }}</div>
-          {% if c.whatsapp %}<div style="font-size:0.75rem;color:var(--muted)">📱 {{ c.whatsapp }}</div>{% endif %}
-          {% if c.dias_em_atraso > 0 %}
-          <div style="font-size:0.72rem;color:var(--danger);margin-top:0.2rem">⚠ {{ c.dias_em_atraso }} dia(s) em atraso</div>
+        <div style="display:flex;align-items:center;gap:0.7rem">
+          {% if c.foto_url %}
+          <img src="{{ c.foto_url }}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0"
+            onerror="this.style.display='none'">
           {% endif %}
+          <div>
+            <div class="client-card-name">{{ c.nome }}</div>
+            {% if c.whatsapp %}<div style="font-size:0.75rem;color:var(--muted)">📱 {{ c.whatsapp }}</div>{% endif %}
+            {% if c.dias_em_atraso > 0 %}
+            <div style="font-size:0.72rem;color:var(--danger);margin-top:0.2rem">⚠ {{ c.dias_em_atraso }} dia(s) em atraso</div>
+            {% endif %}
+          </div>
         </div>
         <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
       </div>
@@ -49,10 +55,11 @@
       </div>
 
       <div class="client-card-actions">
+        <button class="btn btn-secondary btn-sm" onclick="verDetalhes({{ loop.index0 }})">👁 Ver</button>
         <a href="/editar/{{ c.id }}" class="btn btn-secondary btn-sm">✎ Editar</a>
         {% if role == 'owner' %}
         <form method="post" action="/apagar/{{ c.id }}" style="display:inline" onsubmit="return confirm('Apagar {{ c.nome }}?')">
-          <button type="submit" class="btn btn-danger btn-sm">✕ Apagar</button>
+          <button type="submit" class="btn btn-danger btn-sm">✕</button>
         </form>
         {% endif %}
       </div>
@@ -67,7 +74,98 @@
   </div>
 </div>
 
+<!-- Modal Ver Detalhes -->
+<div class="modal-overlay" id="modalDetalhes" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal" style="max-width:420px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h3 id="detNome" style="margin:0"></h3>
+      <button onclick="document.getElementById('modalDetalhes').classList.remove('active')" 
+        style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+
+    <div id="detFotoWrap" style="text-align:center;margin-bottom:1rem;display:none">
+      <img id="detFoto" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">
+    </div>
+
+    <div class="hist-list" style="margin-bottom:0">
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">📱 WhatsApp</span><span id="detWa">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">🪪 CPF</span><span id="detCpf">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">📍 Endereço</span><span id="detEnd" style="text-align:right;max-width:55%">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">✉️ Email</span><span id="detEmail">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">🔑 Chave Pix</span><span id="detPix">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">💰 Limite</span><span id="detLimite">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">📅 Início</span><span id="detInicio">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">💵 Valor/dia</span><span id="detValor">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">✅ Diárias</span><span id="detDiarias">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">💚 Total pago</span><span id="detTotal" style="color:var(--accent);font-weight:500">—</span></div>
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:0.5rem">
+      <a id="detEditLink" href="#" class="btn btn-primary btn-sm" style="flex:1;text-align:center">✎ Editar</a>
+      <a id="detWaLink" href="#" target="_blank" class="btn btn-success btn-sm" style="flex:1;text-align:center;display:none">💬 WhatsApp</a>
+    </div>
+  </div>
+</div>
+
 <script>
+const clientes = [
+  {% for c in clientes %}
+  {
+    id: {{ c.id }},
+    nome: {{ c.nome|tojson }},
+    whatsapp: {{ (c.whatsapp or '')|tojson }},
+    cpf: {{ (c.cpf or '')|tojson }},
+    endereco: {{ (c.endereco or '')|tojson }},
+    email: {{ (c.email or '')|tojson }},
+    chave_pix: {{ (c.chave_pix or '')|tojson }},
+    limite: {{ c.limite or 0 }},
+    data_inicio: {{ c.data_inicio|tojson }},
+    valor_diaria: {{ c.valor_diaria }},
+    diarias_pagas: {{ c.diarias_pagas }},
+    total_pago: {{ c.total_pago }},
+    foto_url: {{ (c.foto_url or '')|tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+function verDetalhes(idx) {
+  const c = clientes[idx];
+  document.getElementById('detNome').textContent = c.nome;
+  document.getElementById('detWa').textContent   = c.whatsapp || '—';
+  document.getElementById('detCpf').textContent  = c.cpf || '—';
+  document.getElementById('detEnd').textContent  = c.endereco || '—';
+  document.getElementById('detEmail').textContent = c.email || '—';
+  document.getElementById('detPix').textContent  = c.chave_pix || '—';
+  document.getElementById('detLimite').textContent = c.limite > 0 ? 'R$ ' + c.limite.toFixed(2) : '—';
+  document.getElementById('detInicio').textContent = c.data_inicio || '—';
+  document.getElementById('detValor').textContent = 'R$ ' + c.valor_diaria.toFixed(2);
+  document.getElementById('detDiarias').textContent = c.diarias_pagas + '/20';
+  document.getElementById('detTotal').textContent = 'R$ ' + c.total_pago.toFixed(2);
+  document.getElementById('detEditLink').href = '/editar/' + c.id;
+
+  // Foto
+  const fotoWrap = document.getElementById('detFotoWrap');
+  const fotoImg  = document.getElementById('detFoto');
+  if (c.foto_url) {
+    fotoImg.src = c.foto_url;
+    fotoWrap.style.display = 'block';
+  } else {
+    fotoWrap.style.display = 'none';
+  }
+
+  // WhatsApp link
+  const waLink = document.getElementById('detWaLink');
+  if (c.whatsapp) {
+    const num = c.whatsapp.replace(/\D/g,'');
+    waLink.href = 'https://wa.me/55' + num;
+    waLink.style.display = '';
+  } else {
+    waLink.style.display = 'none';
+  }
+
+  document.getElementById('modalDetalhes').classList.add('active');
+}
+
 function filtrarCards() {
   const busca = document.getElementById('busca').value.toLowerCase();
   const cards = document.querySelectorAll('.client-card');
