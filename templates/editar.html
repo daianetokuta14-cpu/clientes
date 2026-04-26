@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Editar — {{ c.nome }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div class="page-header-left"><h1>Editar Cliente</h1><p>{{ c.nome }}</p></div>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+      {% if c.status == 'aguardando' %}
+      <button class="btn btn-success" onclick="abrirRenovar()">↻ Renovar Contrato</button>
+      {% endif %}
+      {% if role == 'owner' %}
+      <form method="post" action="/apagar/{{ c.id }}" onsubmit="return confirm('Apagar {{ c.nome }} permanentemente?')">
+        <button type="submit" class="btn btn-danger">✕ Apagar Cliente</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="form-card" style="margin-bottom:2rem">
+    <form method="post" action="/editar/{{ c.id }}">
+      <div class="divider-label">Dados Pessoais</div>
+      <div class="form-group"><label>Nome completo</label><input type="text" name="nome" value="{{ c.nome }}" required></div>
+      <div class="form-group"><label>Chave Pix</label><input type="text" name="chave_pix" value="{{ c.chave_pix or '' }}"></div>
+      <div class="divider-label">Contrato Atual</div>
+      <div class="form-row">
+        <div class="form-group"><label>Valor da diária (R$)</label><input type="number" name="valor_diaria" step="0.01" value="{{ c.valor_diaria }}" required></div>
+        <div class="form-group"><label>Data de início</label><input type="date" name="data_inicio" value="{{ c.data_inicio }}"></div>
+      </div>
+      <div style="display:flex;gap:0.7rem;margin-top:0.5rem">
+        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        <a href="/dashboard" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Pagamentos -->
+  <div class="form-card" style="margin-bottom:2rem">
+    <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">
+      Pagamentos do Contrato Atual
+      <span style="color:var(--accent);margin-left:0.5rem">{{ c.diarias_pagas }}/20 diárias</span>
+    </h3>
+    {% if pags %}
+    <div class="hist-list">
+      {% for p in pags %}
+      <div class="hist-item">
+        <div>
+          <div class="nome-col" style="font-size:0.88rem">{{ p.data|replace('-','/')|truncate(10,true,'') }}</div>
+          <div class="hist-date">{{ p.diarias }} diária(s){% if p.obs %} · {{ p.obs }}{% endif %}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span class="hist-val">R$ {{ "%.2f"|format(p.valor) }}</span>
+          {% if role == 'owner' %}
+          <form method="post" action="/desfazer/{{ p.id }}" onsubmit="return confirm('Desfazer este pagamento?')">
+            <button type="submit" class="btn btn-danger btn-sm" title="Desfazer">↩</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-family:var(--mono);font-size:0.85rem">
+      <span style="color:var(--muted)">Total pago neste contrato</span>
+      <span style="color:var(--accent);font-weight:500">R$ {{ "%.2f"|format(c.total_pago) }}</span>
+    </div>
+    {% else %}
+    <p style="color:var(--muted);font-family:var(--mono);font-size:0.82rem">Nenhum pagamento registrado neste contrato.</p>
+    {% endif %}
+  </div>
+
+  <!-- Histórico de contratos anteriores -->
+  {% if hist %}
+  <div class="form-card">
+    <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">Contratos Anteriores</h3>
+    <div class="hist-list">
+      {% for h in hist %}
+      <div class="hist-item">
+        <div>
+          <div class="nome-col" style="font-size:0.88rem">{{ h.data_inicio }} → {{ h.data_fim }}</div>
+          <div class="hist-date">R$ {{ "%.2f"|format(h.valor_diaria) }} / diária</div>
+        </div>
+        <span class="hist-val">R$ {{ "%.2f"|format(h.total_pago) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal Renovar -->
+<div class="modal-overlay" id="modalRenovar" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Renovar Contrato</h3>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1.2rem">{{ c.nome }} · Novo ciclo de 20 diárias</p>
+    <form method="post" action="/renovar/{{ c.id }}">
+      <div class="form-group">
+        <label>Novo valor de diária (R$)</label>
+        <input type="number" name="valor_diaria" step="0.01" min="0.01" value="{{ c.valor_diaria }}" required>
+      </div>
+      <div class="form-group">
+        <label>Data de início</label>
+        <input type="date" name="data_inicio" id="renovarData" required>
+      </div>
+      <div style="font-family:var(--mono);font-size:0.78rem;color:var(--muted);margin-bottom:1rem">Histórico anterior será preservado.</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalRenovar').classList.remove('active')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Renovar</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function abrirRenovar() {
+  document.getElementById('renovarData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modalRenovar').classList.add('active');
+}
+</script>
+{% endblock %}
