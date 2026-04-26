@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Clientes — Mega Credito{% endblock %}
+{% block content %}
+<div class="container has-bottom-nav">
+  <div class="page-header">
+    <div class="page-header-left"><h1>Clientes</h1><p>Histórico completo de contratos</p></div>
+    <a href="/cadastrar" class="btn btn-primary btn-sm">+ Novo</a>
+  </div>
+
+  <!-- Barra de busca -->
+  <div style="margin-bottom:1rem;position:relative">
+    <span style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:1.1rem">🔍</span>
+    <input type="text" id="busca" placeholder="Buscar cliente pelo nome..." 
+      style="padding-left:2.8rem" oninput="filtrarCards()">
+  </div>
+
+  <div class="tabs">
+    <a href="/clientes?f=todos"      class="tab-btn {% if filtro=='todos' %}active{% endif %}">Todos</a>
+    <a href="/clientes?f=ativos"     class="tab-btn {% if filtro=='ativos' %}active{% endif %}">Ativos</a>
+    <a href="/clientes?f=atraso"     class="tab-btn {% if filtro=='atraso' %}active{% endif %}">Em Atraso</a>
+    <a href="/clientes?f=aguardando" class="tab-btn {% if filtro=='aguardando' %}active{% endif %}">Renovação</a>
+    <a href="/clientes?f=arquivados" class="tab-btn {% if filtro=='arquivados' %}active{% endif %}">Arquivados</a>
+  </div>
+
+  <div class="client-cards" id="listaClientes">
+    {% for c in clientes %}
+    <div class="client-card {% if c.dias_em_atraso > 0 %}atraso{% endif %}" data-nome="{{ c.nome|lower }}">
+      <div class="client-card-header">
+        <div>
+          <div class="client-card-name">{{ c.nome }}</div>
+          {% if c.whatsapp %}<div style="font-size:0.75rem;color:var(--muted)">📱 {{ c.whatsapp }}</div>{% endif %}
+          {% if c.dias_em_atraso > 0 %}
+          <div style="font-size:0.72rem;color:var(--danger);margin-top:0.2rem">⚠ {{ c.dias_em_atraso }} dia(s) em atraso</div>
+          {% endif %}
+        </div>
+        <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
+      </div>
+
+      <div class="progress-row">
+        <div class="progress-bar"><div class="progress-fill {% if c.diarias_pagas >= 20 %}full{% endif %}" style="width:{{ c.pct }}%"></div></div>
+        <span class="mono" style="color:var(--muted);font-size:0.75rem;white-space:nowrap">{{ c.diarias_pagas }}/20</span>
+      </div>
+
+      <div class="client-card-body">
+        <div><div class="client-card-label">Valor/dia</div><div>R$ {{ "%.2f"|format(c.valor_diaria) }}</div></div>
+        <div><div class="client-card-label">Total pago</div><div style="color:var(--accent)">R$ {{ "%.2f"|format(c.total_pago) }}</div></div>
+        {% if c.cpf %}<div><div class="client-card-label">CPF</div><div>{{ c.cpf }}</div></div>{% endif %}
+        {% if c.saldo_pendente > 0 %}<div><div class="client-card-label">Saldo pend.</div><div style="color:var(--warn)">R$ {{ "%.2f"|format(c.saldo_pendente) }}</div></div>{% endif %}
+      </div>
+
+      <div class="client-card-actions">
+        <a href="/editar/{{ c.id }}" class="btn btn-secondary btn-sm">✎ Editar</a>
+        {% if role == 'owner' %}
+        <form method="post" action="/apagar/{{ c.id }}" style="display:inline" onsubmit="return confirm('Apagar {{ c.nome }}?')">
+          <button type="submit" class="btn btn-danger btn-sm">✕ Apagar</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono)">Nenhum cliente encontrado.</div>
+    {% endfor %}
+  </div>
+
+  <div id="semResultado" style="display:none;text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono)">
+    Nenhum cliente encontrado para esta busca.
+  </div>
+</div>
+
+<script>
+function filtrarCards() {
+  const busca = document.getElementById('busca').value.toLowerCase();
+  const cards = document.querySelectorAll('.client-card');
+  let visiveis = 0;
+  cards.forEach(card => {
+    const nome = card.getAttribute('data-nome') || '';
+    if (nome.includes(busca)) {
+      card.style.display = ''; visiveis++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  document.getElementById('semResultado').style.display = visiveis === 0 ? 'block' : 'none';
+}
+</script>
+{% endblock %}
