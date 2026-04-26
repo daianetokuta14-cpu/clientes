@@ -28,9 +28,17 @@
     <a href="/cadastrar" class="btn btn-primary btn-sm">+ Novo</a>
   </div>
 
-  <div class="client-cards" style="border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;padding:0.75rem;background:var(--surface)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-top:none;padding:0.75rem 0.75rem 0">
+    <div style="position:relative">
+      <span style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:1.1rem">🔍</span>
+      <input type="text" id="busca" placeholder="Buscar cliente pelo nome..."
+        style="padding-left:2.8rem" oninput="filtrarCards()">
+    </div>
+  </div>
+
+  <div class="client-cards" id="listaClientes" style="border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;padding:0.75rem;background:var(--surface)">
     {% for c in clientes %}
-    <div class="client-card {% if c.dias_em_atraso > 0 %}atraso{% endif %}">
+    <div class="client-card {% if c.dias_em_atraso > 0 %}atraso{% endif %}" data-nome="{{ c.nome|lower }}">
       <div class="client-card-header">
         <div>
           <div class="client-card-name">{{ c.nome }}</div>
@@ -74,6 +82,9 @@
       Nenhum cliente ativo. <a href="/cadastrar" style="color:var(--accent)">Cadastrar agora</a>
     </div>
     {% endfor %}
+    <div id="semResultado" style="display:none;text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono)">
+      Nenhum cliente encontrado.
+    </div>
   </div>
 </div>
 
@@ -128,6 +139,22 @@
 
 <script>
 let _valorDia = 0, _saldoPend = 0;
+
+function filtrarCards() {
+  const busca = document.getElementById('busca').value.toLowerCase();
+  const cards = document.querySelectorAll('#listaClientes .client-card');
+  let visiveis = 0;
+  cards.forEach(card => {
+    const nome = card.getAttribute('data-nome') || '';
+    if (nome.includes(busca)) {
+      card.style.display = ''; visiveis++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  document.getElementById('semResultado').style.display = visiveis === 0 ? 'block' : 'none';
+}
+
 function abrirPagar(id, nome, valorDia, restantes, saldo) {
   _valorDia = valorDia; _saldoPend = saldo;
   document.getElementById('mPagarNome').textContent = nome + ' · ' + restantes + ' diária(s) restantes';
