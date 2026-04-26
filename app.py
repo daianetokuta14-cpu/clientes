@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from models import db, Cliente, Pagamento, ContratoHistorico
 from datetime import date, datetime
 from functools import wraps
-import os, base64, re
+import os, base64, re, time
 
 app = Flask(__name__, template_folder='templates')
 _db_url = os.environ.get('DATABASE_URL', '')
@@ -12,20 +12,56 @@ elif _db_url.startswith('postgres://'):
     _db_url = 'postgresql://' + _db_url[len('postgres://'):]
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fincontrol-chave-secreta-2025')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-PINS = {
-    'owner':       os.environ.get('PIN_OWNER', '3670'),
-    'funcionario': os.environ.get('PIN_FUNC',  '2930'),
-}
+# ── Segurança: força SECRET_KEY forte no ambiente ────────────────
+if not app.config['SECRET_KEY']:
+    raise RuntimeError("SECRET_KEY não configurada! Defina a variável de ambiente SECRET_KEY.")
 
-BOT_API_KEY = os.environ.get('BOT_API_KEY', 'megacredito2025')
+# ── PINs via variável de ambiente APENAS ────────────────────────
+PINS = {
+    'owner':       os.environ.get('PIN_OWNER', ''),
+    'funcionario': os.environ.get('PIN_FUNC',  ''),
+}
+if not PINS['owner'] or not PINS['funcionario']:
+    raise RuntimeError("PIN_OWNER e PIN_FUNC devem ser definidos como variáveis de ambiente!")
+
+# ── API Key do bot via variável de ambiente APENAS ───────────────
+BOT_API_KEY = os.environ.get('BOT_API_KEY', '')
+if not BOT_API_KEY:
+    raise RuntimeError("BOT_API_KEY não configurada!")
+
+# ── Rate limit simples para login (evita força bruta) ───────────
+_login_attempts = {}  # ip -> (tentativas, timestamp_primeiro)
+MAX_TENTATIVAS  = 5
+JANELA_SEGUNDOS = 300  # 5 minutos
+
+def check_rate_limit(ip: str) -> bool:
+    """Retorna True se o IP está bloqueado."""
+    now = time.time()
+    if ip in _login_attempts:
+        tentativas, primeiro = _login_attempts[ip]
+        if now - primeiro > JANELA_SEGUNDOS:
+            # Janela expirou, reseta
+            _login_attempts[ip] = (1, now)
+            return False
+        if tentativas >= MAX_TENTATIVAS:
+            return True
+        _login_attempts[ip] = (tentativas + 1, primeiro)
+    else:
+        _login_attempts[ip] = (1, now)
+    return False
+
+def reset_rate_limit(ip: str):
+    _login_attempts.pop(ip, None)
 
 db.init_app(app)
 
 with app.app_context():
     db.create_all()
+
+# ── Decorators de autenticação ───────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -39,7 +75,7 @@ def owner_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get('role') != 'owner':
-            flash('Apenas o owner pode executar esta acao.', 'error')
+            flash('Apenas o owner pode executar esta ação.', 'error')
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated
@@ -47,11 +83,14 @@ def owner_required(f):
 def api_key_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        key = request.headers.get('X-API-Key') or request.args.get('api_key')
-        if key != BOT_API_KEY:
-            return jsonify(erro="nao autorizado"), 403
+        # Aceita APENAS via header — nunca via URL (evita logs com key exposta)
+        key = request.headers.get('X-API-Key')
+        if not key or key != BOT_API_KEY:
+            return jsonify(erro="não autorizado"), 403
         return f(*args, **kwargs)
     return decorated
+
+# ── Helpers ──────────────────────────────────────────────────────
 
 def today():
     return date.today().isoformat()
@@ -67,18 +106,34 @@ def salvar_arquivo(file):
         return f"data:{mime};base64,{b64}"
     return None
 
+# ── Rotas web ────────────────────────────────────────────────────
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if 'role' in session:
         return redirect(url_for('dashboard'))
+
+    ip = request.remote_addr
     error = None
+
     if request.method == 'POST':
+        # Verifica rate limit antes de checar PIN
+        if check_rate_limit(ip):
+            minutos = JANELA_SEGUNDOS // 60
+            error = f'Muitas tentativas. Aguarde {minutos} minutos.'
+            return render_template('login.html', error=error)
+
         role = request.form.get('role')
         pin  = request.form.get('pin', '')
+
         if role in PINS and pin == PINS[role]:
+            reset_rate_limit(ip)
             session['role'] = role
+            session.permanent = False  # sessão expira ao fechar o browser
             return redirect(url_for('dashboard'))
+
         error = 'PIN incorreto. Tente novamente.'
+
     return render_template('login.html', error=error)
 
 @app.route('/logout')
@@ -202,7 +257,7 @@ def pagar(id):
     valor = float(request.form['valor'])
     obs   = request.form.get('obs', '').strip()
     if valor <= 0:
-        flash('Valor invalido.', 'error')
+        flash('Valor inválido.', 'error')
         return redirect(url_for('dashboard'))
     saldo = c.saldo_pendente + valor
     diarias_novas = int(saldo // c.valor_diaria)
@@ -213,11 +268,11 @@ def pagar(id):
     db.session.add(p)
     db.session.commit()
     if c.diarias_pagas >= 20:
-        flash(f'{c.nome} completou as 20 diarias!', 'success')
+        flash(f'{c.nome} completou as 20 diárias!', 'success')
     elif diarias_novas == 0:
-        flash(f'R$ {valor:.2f} registrado. Faltam R$ {c.valor_diaria - c.saldo_pendente:.2f} para proxima diaria.', 'info')
+        flash(f'R$ {valor:.2f} registrado. Faltam R$ {c.valor_diaria - c.saldo_pendente:.2f} para próxima diária.', 'info')
     else:
-        flash(f'+{diarias_novas} diaria(s) para {c.nome}. Total: {c.diarias_pagas}/20.', 'success')
+        flash(f'+{diarias_novas} diária(s) para {c.nome}. Total: {c.diarias_pagas}/20.', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/desfazer/<int:pag_id>', methods=['POST'])
@@ -289,14 +344,12 @@ def api_stats():
 @api_key_required
 def api_cliente_por_whatsapp(numero):
     numero_limpo = re.sub(r'\D', '', numero)
-    # Remove 55 do inicio se tiver
     if numero_limpo.startswith('55') and len(numero_limpo) > 11:
         numero_limpo = numero_limpo[2:]
     clientes = Cliente.query.filter_by(ativo=True).all()
     for c in clientes:
         if c.whatsapp:
             wa = re.sub(r'\D', '', c.whatsapp)
-            # Compara os ultimos 8 digitos para ignorar DDD e codigo do pais
             if len(wa) >= 8 and len(numero_limpo) >= 8 and wa[-8:] == numero_limpo[-8:]:
                 return jsonify({
                     'id':              c.id,
@@ -317,7 +370,7 @@ def api_pagar(id):
     valor = float(data.get('valor', 0))
     obs   = data.get('obs', 'Pago via bot WhatsApp')
     if valor <= 0:
-        return jsonify(erro='Valor invalido'), 400
+        return jsonify(erro='Valor inválido'), 400
     saldo            = c.saldo_pendente + valor
     diarias_novas    = int(saldo // c.valor_diaria)
     c.saldo_pendente = round(saldo % c.valor_diaria, 2)
