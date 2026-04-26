@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Mega Credito{% endblock %}
+{% block content %}
+<div class="container has-bottom-nav">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Dashboard</h1>
+      <p>{{ hoje }}</p>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);text-transform:uppercase">Total do mês</div>
+      <div style="font-size:1.4rem;font-weight:800;color:var(--accent)">R$ {{ "%.2f"|format(total_mes) }}</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Ativos</div><div class="stat-value blue">{{ ativos }}</div></div>
+    <div class="stat-card"><div class="stat-label">Hoje</div><div class="stat-value green">R$ {{ "%.2f"|format(total_hoje) }}</div></div>
+    <div class="stat-card"><div class="stat-label">Renovação</div><div class="stat-value warn">{{ aguardando }}</div></div>
+    <div class="stat-card" style="{% if em_atraso > 0 %}border-color:var(--danger){% endif %}">
+      <div class="stat-label">Em Atraso</div>
+      <div class="stat-value" style="color:var(--danger)">{{ em_atraso }}</div>
+    </div>
+  </div>
+
+  <div class="table-header" style="background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none">
+    <h2 style="margin:0">Contratos</h2>
+    <a href="/cadastrar" class="btn btn-primary btn-sm">+ Novo</a>
+  </div>
+
+  <div class="client-cards" style="border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;padding:0.75rem;background:var(--surface)">
+    {% for c in clientes %}
+    <div class="client-card {% if c.dias_em_atraso > 0 %}atraso{% endif %}">
+      <div class="client-card-header">
+        <div>
+          <div class="client-card-name">{{ c.nome }}</div>
+          {% if c.dias_em_atraso > 0 %}
+          <div style="font-size:0.72rem;color:var(--danger);margin-top:0.2rem">⚠ {{ c.dias_em_atraso }} dia(s) em atraso — R$ {{ "%.2f"|format(c.valor_em_atraso) }}</div>
+          {% endif %}
+        </div>
+        <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
+      </div>
+
+      <div class="progress-row">
+        <div class="progress-bar"><div class="progress-fill {% if c.diarias_pagas >= 20 %}full{% endif %}" style="width:{{ c.pct }}%"></div></div>
+        <span class="mono" style="color:var(--muted);font-size:0.75rem;white-space:nowrap">{{ c.diarias_pagas }}/20</span>
+      </div>
+
+      <div class="client-card-body">
+        <div><div class="client-card-label">Valor/dia</div><div>R$ {{ "%.2f"|format(c.valor_diaria) }}</div></div>
+        <div><div class="client-card-label">Total pago</div><div style="color:var(--accent)">R$ {{ "%.2f"|format(c.total_pago) }}</div></div>
+        {% if c.saldo_pendente > 0 %}
+        <div><div class="client-card-label">Saldo pend.</div><div style="color:var(--warn)">R$ {{ "%.2f"|format(c.saldo_pendente) }}</div></div>
+        {% endif %}
+        {% if c.whatsapp %}<div><div class="client-card-label">WhatsApp</div><div>{{ c.whatsapp }}</div></div>{% endif %}
+      </div>
+
+      <div class="client-card-actions">
+        {% if c.status == 'aguardando' %}
+          <button class="btn btn-success btn-sm" onclick="abrirRenovar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }})">↻ Renovar</button>
+        {% else %}
+          <button class="btn btn-primary btn-sm" onclick="abrirPagar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }}, {{ 20 - c.diarias_pagas }}, {{ c.saldo_pendente }})">✓ Pagar</button>
+        {% endif %}
+        <a href="/editar/{{ c.id }}" class="btn btn-secondary btn-sm">✎ Editar</a>
+        {% if role == 'owner' %}
+        <form method="post" action="/apagar/{{ c.id }}" style="display:inline" onsubmit="return confirm('Apagar {{ c.nome }}?')">
+          <button type="submit" class="btn btn-danger btn-sm">✕</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono);font-size:0.85rem">
+      Nenhum cliente ativo. <a href="/cadastrar" style="color:var(--accent)">Cadastrar agora</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Modal Pagar -->
+<div class="modal-overlay" id="modalPagar" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Registrar Pagamento</h3>
+    <p id="mPagarNome" style="color:var(--muted);font-size:0.85rem;margin-bottom:0.3rem"></p>
+    <p id="mPagarSaldo" style="color:var(--warn);font-size:0.78rem;margin-bottom:0.75rem"></p>
+    <form method="post" id="formPagar" action="">
+      <div class="form-group">
+        <label>Valor recebido (R$)</label>
+        <input type="number" name="valor" id="mPagarValor" step="0.01" min="0.01" required oninput="calcDiarias()" inputmode="decimal">
+        <div id="mPagarHint" style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-top:0.4rem"></div>
+      </div>
+      <div class="form-group">
+        <label>Observação (opcional)</label>
+        <input type="text" name="obs" placeholder="Ex: Pix recebido">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalPagar').classList.remove('active')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Confirmar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Renovar -->
+<div class="modal-overlay" id="modalRenovar" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Renovar Contrato</h3>
+    <p id="mRenovarNome" style="color:var(--muted);font-size:0.85rem;margin-bottom:0.75rem"></p>
+    <form method="post" id="formRenovar" action="">
+      <div class="form-group">
+        <label>Novo valor de diária (R$)</label>
+        <input type="number" name="valor_diaria" id="mRenovarValor" step="0.01" min="0.01" required inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Data de início</label>
+        <input type="date" name="data_inicio" id="mRenovarData" required>
+      </div>
+      <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);margin-bottom:1rem">
+        Novo contrato com 20 diárias. Domingos não contam como atraso.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalRenovar').classList.remove('active')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Renovar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let _valorDia = 0, _saldoPend = 0;
+function abrirPagar(id, nome, valorDia, restantes, saldo) {
+  _valorDia = valorDia; _saldoPend = saldo;
+  document.getElementById('mPagarNome').textContent = nome + ' · ' + restantes + ' diária(s) restantes';
+  document.getElementById('mPagarSaldo').textContent = saldo > 0 ? 'Saldo pendente: R$ ' + saldo.toFixed(2) : '';
+  document.getElementById('mPagarValor').value = '';
+  document.getElementById('mPagarHint').textContent = 'Valor por diária: R$ ' + valorDia.toFixed(2);
+  document.getElementById('formPagar').action = '/pagar/' + id;
+  document.getElementById('modalPagar').classList.add('active');
+  setTimeout(() => document.getElementById('mPagarValor').focus(), 100);
+}
+function calcDiarias() {
+  const v = parseFloat(document.getElementById('mPagarValor').value) || 0;
+  if (v <= 0) return;
+  const total = v + _saldoPend;
+  const diarias = Math.floor(total / _valorDia);
+  const sobra = (total % _valorDia).toFixed(2);
+  document.getElementById('mPagarHint').textContent = diarias > 0
+    ? '+' + diarias + ' diária(s). Saldo restante: R$ ' + sobra
+    : 'Parcial. Saldo acumulado: R$ ' + total.toFixed(2) + ' (faltam R$ ' + (_valorDia - total).toFixed(2) + ')';
+}
+function abrirRenovar(id, nome, valorAtual) {
+  document.getElementById('mRenovarNome').textContent = nome;
+  document.getElementById('mRenovarValor').value = valorAtual.toFixed(2);
+  document.getElementById('mRenovarData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('formRenovar').action = '/renovar/' + id;
+  document.getElementById('modalRenovar').classList.add('active');
+}
+</script>
+{% endblock %}
