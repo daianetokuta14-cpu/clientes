@@ -4,11 +4,11 @@ from datetime import date, datetime
 from functools import wraps
 import os, base64, re
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///fincontrol.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fincontrol-chave-secreta-2025')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 PINS = {
     'owner':       os.environ.get('PIN_OWNER', '3670'),
@@ -21,8 +21,6 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
-
-# ── Decorators ───────────────────────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -46,11 +44,9 @@ def api_key_required(f):
     def decorated(*args, **kwargs):
         key = request.headers.get('X-API-Key') or request.args.get('api_key')
         if key != BOT_API_KEY:
-            return jsonify(erro="não autorizado"), 403
+            return jsonify(erro="nao autorizado"), 403
         return f(*args, **kwargs)
     return decorated
-
-# ── Helpers ──────────────────────────────────────────────────────
 
 def today():
     return date.today().isoformat()
@@ -59,15 +55,12 @@ def this_month():
     return date.today().strftime('%Y-%m')
 
 def salvar_arquivo(file):
-    """Converte arquivo para base64 para armazenar no banco"""
     if file and file.filename:
         data = file.read()
         b64 = base64.b64encode(data).decode('utf-8')
         mime = file.content_type or 'application/octet-stream'
         return f"data:{mime};base64,{b64}"
     return None
-
-# ── Rotas do site ────────────────────────────────────────────────
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -215,9 +208,9 @@ def pagar(id):
     db.session.add(p)
     db.session.commit()
     if c.diarias_pagas >= 20:
-        flash(f'{c.nome} completou as 20 diarias! Aguardando renovacao.', 'success')
+        flash(f'{c.nome} completou as 20 diarias!', 'success')
     elif diarias_novas == 0:
-        flash(f'R$ {valor:.2f} registrado. Saldo pendente: R$ {c.saldo_pendente:.2f} (faltam R$ {c.valor_diaria - c.saldo_pendente:.2f} para proxima diaria).', 'info')
+        flash(f'R$ {valor:.2f} registrado. Faltam R$ {c.valor_diaria - c.saldo_pendente:.2f} para proxima diaria.', 'info')
     else:
         flash(f'+{diarias_novas} diaria(s) para {c.nome}. Total: {c.diarias_pagas}/20.', 'success')
     return redirect(url_for('dashboard'))
@@ -256,12 +249,11 @@ def renovar(id):
     flash(f'Contrato de {c.nome} renovado!', 'success')
     return redirect(url_for('dashboard'))
 
-# ── Rotas de API para o Bot ──────────────────────────────────────
+# ── API para o Bot ───────────────────────────────────────────────
 
 @app.route('/api/inadimplentes')
 @api_key_required
 def api_inadimplentes():
-    """Lista clientes inadimplentes com whatsapp."""
     clientes = Cliente.query.filter_by(ativo=True).all()
     lista = []
     for c in clientes:
@@ -279,7 +271,6 @@ def api_inadimplentes():
 @app.route('/api/stats')
 @api_key_required
 def api_stats():
-    """Estatísticas do dia e mês."""
     mes        = this_month()
     pags_mes   = Pagamento.query.filter(Pagamento.data.startswith(mes)).all()
     total_mes  = sum(p.valor for p in pags_mes)
@@ -292,22 +283,23 @@ def api_stats():
 @app.route('/api/cliente_por_whatsapp/<numero>')
 @api_key_required
 def api_cliente_por_whatsapp(numero):
-    """Busca cliente pelo número de WhatsApp."""
     numero_limpo = re.sub(r'\D', '', numero)
+    # Remove 55 do inicio se tiver
     if numero_limpo.startswith('55') and len(numero_limpo) > 11:
         numero_limpo = numero_limpo[2:]
     clientes = Cliente.query.filter_by(ativo=True).all()
     for c in clientes:
         if c.whatsapp:
             wa = re.sub(r'\D', '', c.whatsapp)
-            if wa.endswith(numero_limpo) or numero_limpo.endswith(wa):
+            # Compara os ultimos 8 digitos para ignorar DDD e codigo do pais
+            if len(wa) >= 8 and len(numero_limpo) >= 8 and wa[-8:] == numero_limpo[-8:]:
                 return jsonify({
-                    'id':             c.id,
-                    'nome':           c.nome,
-                    'whatsapp':       c.whatsapp,
-                    'diarias_pagas':  c.diarias_pagas,
-                    'total_pago':     c.total_pago,
-                    'dias_em_atraso': c.dias_em_atraso,
+                    'id':              c.id,
+                    'nome':            c.nome,
+                    'whatsapp':        c.whatsapp,
+                    'diarias_pagas':   c.diarias_pagas,
+                    'total_pago':      c.total_pago,
+                    'dias_em_atraso':  c.dias_em_atraso,
                     'valor_em_atraso': c.valor_em_atraso
                 })
     return jsonify(None), 404
@@ -315,13 +307,12 @@ def api_cliente_por_whatsapp(numero):
 @app.route('/api/pagar/<int:id>', methods=['POST'])
 @api_key_required
 def api_pagar(id):
-    """Registra pagamento via API (usado pelo bot)."""
     c     = Cliente.query.get_or_404(id)
     data  = request.json or {}
     valor = float(data.get('valor', 0))
     obs   = data.get('obs', 'Pago via bot WhatsApp')
     if valor <= 0:
-        return jsonify(erro='Valor inválido'), 400
+        return jsonify(erro='Valor invalido'), 400
     saldo            = c.saldo_pendente + valor
     diarias_novas    = int(saldo // c.valor_diaria)
     c.saldo_pendente = round(saldo % c.valor_diaria, 2)
@@ -331,8 +322,6 @@ def api_pagar(id):
     db.session.add(p)
     db.session.commit()
     return jsonify(ok=True, diarias_pagas=c.diarias_pagas, diarias_novas=diarias_novas)
-
-# ────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     with app.app_context():
