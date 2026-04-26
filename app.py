@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from models import db, Cliente, Pagamento, ContratoHistorico
 from datetime import date, datetime
 from functools import wraps
-import os, base64
+import os, base64, re
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///fincontrol.db').replace('postgres://', 'postgresql://')
@@ -15,10 +15,14 @@ PINS = {
     'funcionario': os.environ.get('PIN_FUNC',  '2930'),
 }
 
+BOT_API_KEY = os.environ.get('BOT_API_KEY', 'megacredito2025')
+
 db.init_app(app)
 
 with app.app_context():
     db.create_all()
+
+# ── Decorators ───────────────────────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -37,6 +41,17 @@ def owner_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def api_key_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        if key != BOT_API_KEY:
+            return jsonify(erro="não autorizado"), 403
+        return f(*args, **kwargs)
+    return decorated
+
+# ── Helpers ──────────────────────────────────────────────────────
+
 def today():
     return date.today().isoformat()
 
@@ -51,6 +66,8 @@ def salvar_arquivo(file):
         mime = file.content_type or 'application/octet-stream'
         return f"data:{mime};base64,{b64}"
     return None
+
+# ── Rotas do site ────────────────────────────────────────────────
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -239,33 +256,83 @@ def renovar(id):
     flash(f'Contrato de {c.nome} renovado!', 'success')
     return redirect(url_for('dashboard'))
 
+# ── Rotas de API para o Bot ──────────────────────────────────────
+
 @app.route('/api/inadimplentes')
-@login_required
+@api_key_required
 def api_inadimplentes():
+    """Lista clientes inadimplentes com whatsapp."""
     clientes = Cliente.query.filter_by(ativo=True).all()
     lista = []
     for c in clientes:
         if c.dias_em_atraso > 0:
             lista.append({
-                'nome': c.nome,
-                'whatsapp': c.whatsapp,
-                'dias_atraso': c.dias_em_atraso,
-                'valor_atraso': c.valor_em_atraso,
+                'id':            c.id,
+                'nome':          c.nome,
+                'whatsapp':      c.whatsapp,
+                'dias_atraso':   c.dias_em_atraso,
+                'valor_atraso':  c.valor_em_atraso,
                 'diarias_pagas': c.diarias_pagas
             })
     return jsonify(lista)
 
 @app.route('/api/stats')
-@login_required
+@api_key_required
 def api_stats():
-    mes = this_month()
-    pags_mes = Pagamento.query.filter(Pagamento.data.startswith(mes)).all()
-    total_mes = sum(p.valor for p in pags_mes)
-    pags_hoje = Pagamento.query.filter_by(data=today()).all()
+    """Estatísticas do dia e mês."""
+    mes        = this_month()
+    pags_mes   = Pagamento.query.filter(Pagamento.data.startswith(mes)).all()
+    total_mes  = sum(p.valor for p in pags_mes)
+    pags_hoje  = Pagamento.query.filter_by(data=today()).all()
     total_hoje = sum(p.valor for p in pags_hoje)
-    clientes_ativos = Cliente.query.filter_by(ativo=True).all()
-    em_atraso = len([c for c in clientes_ativos if c.dias_em_atraso > 0])
+    ativos     = Cliente.query.filter_by(ativo=True).all()
+    em_atraso  = len([c for c in ativos if c.dias_em_atraso > 0])
     return jsonify(total_mes=total_mes, total_hoje=total_hoje, em_atraso=em_atraso)
+
+@app.route('/api/cliente_por_whatsapp/<numero>')
+@api_key_required
+def api_cliente_por_whatsapp(numero):
+    """Busca cliente pelo número de WhatsApp."""
+    numero_limpo = re.sub(r'\D', '', numero)
+    if numero_limpo.startswith('55') and len(numero_limpo) > 11:
+        numero_limpo = numero_limpo[2:]
+    clientes = Cliente.query.filter_by(ativo=True).all()
+    for c in clientes:
+        if c.whatsapp:
+            wa = re.sub(r'\D', '', c.whatsapp)
+            if wa.endswith(numero_limpo) or numero_limpo.endswith(wa):
+                return jsonify({
+                    'id':             c.id,
+                    'nome':           c.nome,
+                    'whatsapp':       c.whatsapp,
+                    'diarias_pagas':  c.diarias_pagas,
+                    'total_pago':     c.total_pago,
+                    'dias_em_atraso': c.dias_em_atraso,
+                    'valor_em_atraso': c.valor_em_atraso
+                })
+    return jsonify(None), 404
+
+@app.route('/api/pagar/<int:id>', methods=['POST'])
+@api_key_required
+def api_pagar(id):
+    """Registra pagamento via API (usado pelo bot)."""
+    c     = Cliente.query.get_or_404(id)
+    data  = request.json or {}
+    valor = float(data.get('valor', 0))
+    obs   = data.get('obs', 'Pago via bot WhatsApp')
+    if valor <= 0:
+        return jsonify(erro='Valor inválido'), 400
+    saldo            = c.saldo_pendente + valor
+    diarias_novas    = int(saldo // c.valor_diaria)
+    c.saldo_pendente = round(saldo % c.valor_diaria, 2)
+    diarias_novas    = min(diarias_novas, 20 - c.diarias_pagas)
+    c.diarias_pagas  = min(20, c.diarias_pagas + diarias_novas)
+    p = Pagamento(cliente_id=id, data=today(), valor=valor, diarias=diarias_novas, obs=obs)
+    db.session.add(p)
+    db.session.commit()
+    return jsonify(ok=True, diarias_pagas=c.diarias_pagas, diarias_novas=diarias_novas)
+
+# ────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     with app.app_context():
