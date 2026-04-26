@@ -5,7 +5,12 @@ from functools import wraps
 import os, base64, re
 
 app = Flask(__name__, template_folder='templates')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///fincontrol.db').replace('postgres://', 'postgresql://')
+_db_url = os.environ.get('DATABASE_URL', '')
+if not _db_url:
+    _db_url = 'sqlite:///fincontrol.db'
+elif _db_url.startswith('postgres://'):
+    _db_url = 'postgresql://' + _db_url[len('postgres://'):]
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fincontrol-chave-secreta-2025')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
