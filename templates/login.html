@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Login — Mega Credito{% endblock %}
+{% block extra_css %}
+<style>
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:2.5rem;width:100%;max-width:400px}
+.login-logo{font-size:2rem;font-weight:800;color:var(--accent);text-align:center;margin-bottom:0.4rem}
+.login-logo span{color:var(--text)}
+.login-sub{text-align:center;color:var(--muted);font-size:0.85rem;margin-bottom:2rem;font-family:var(--mono)}
+.role-btns{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.5rem}
+.role-btn{padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-family:var(--sans);font-size:0.9rem;font-weight:700;color:var(--text);text-align:center;transition:all 0.2s}
+.role-btn:hover,.role-btn.selected{border-color:var(--accent);color:var(--accent);background:rgba(127,255,110,0.07)}
+.pin-area{display:none}
+.pin-label{font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.5rem;text-align:center}
+.pin-dots{display:flex;gap:0.6rem;justify-content:center;margin-bottom:1.2rem}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border);background:transparent;transition:all 0.15s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem}
+.numpad-btn{padding:0.9rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:1.1rem;font-weight:700;font-family:var(--mono);color:var(--text);transition:all 0.2s;text-align:center;user-select:none}
+.numpad-btn:hover{border-color:var(--accent);color:var(--accent)}
+.numpad-btn:active{transform:scale(0.95)}
+.pin-error{color:var(--danger);font-family:var(--mono);font-size:0.78rem;text-align:center;margin-top:0.75rem;min-height:1rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">Mega<span> Credito</span></div>
+    <div class="login-sub">sistema de controle de diárias</div>
+
+    <div class="role-btns">
+      <div class="role-btn" id="btnOwner" onclick="selectRole('owner')">👑<br>Owner</div>
+      <div class="role-btn" id="btnFunc"  onclick="selectRole('funcionario')">👤<br>Funcionário</div>
+    </div>
+
+    <div class="pin-area" id="pinArea">
+      <div class="pin-label">Digite o PIN</div>
+      <div class="pin-dots">
+        <div class="pin-dot" id="d0"></div>
+        <div class="pin-dot" id="d1"></div>
+        <div class="pin-dot" id="d2"></div>
+        <div class="pin-dot" id="d3"></div>
+      </div>
+      <div class="numpad" id="numpad"></div>
+      <div class="pin-error" id="pinError">{% if error %}{{ error }}{% endif %}</div>
+    </div>
+
+    <!-- form oculto enviado pelo JS -->
+    <form id="loginForm" method="post" action="/" style="display:none">
+      <input type="hidden" name="role" id="fRole">
+      <input type="hidden" name="pin"  id="fPin">
+    </form>
+  </div>
+</div>
+
+<script>
+let selectedRole = null, pinBuffer = '';
+
+function selectRole(r) {
+  selectedRole = r;
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById(r === 'owner' ? 'btnOwner' : 'btnFunc').classList.add('selected');
+  document.getElementById('pinArea').style.display = 'block';
+  pinBuffer = '';
+  renderDots();
+  buildNumpad();
+  document.getElementById('pinError').textContent = '';
+}
+
+function buildNumpad() {
+  const np = document.getElementById('numpad');
+  np.innerHTML = '';
+  ['1','2','3','4','5','6','7','8','9','⌫','0','✓'].forEach(k => {
+    const d = document.createElement('div');
+    d.className = 'numpad-btn';
+    d.textContent = k;
+    d.onclick = () => handleKey(k);
+    np.appendChild(d);
+  });
+}
+
+function renderDots() {
+  for (let i=0;i<4;i++)
+    document.getElementById('d'+i).className = 'pin-dot' + (i < pinBuffer.length ? ' filled' : '');
+}
+
+function handleKey(k) {
+  if (k === '⌫') { pinBuffer = pinBuffer.slice(0,-1); renderDots(); return; }
+  if (k === '✓') { submit(); return; }
+  if (pinBuffer.length < 4) { pinBuffer += k; renderDots(); }
+  if (pinBuffer.length === 4) setTimeout(submit, 120);
+}
+
+function submit() {
+  if (!selectedRole || pinBuffer.length !== 4) return;
+  document.getElementById('fRole').value = selectedRole;
+  document.getElementById('fPin').value  = pinBuffer;
+  document.getElementById('loginForm').submit();
+}
+</script>
+{% endblock %}
