@@ -362,6 +362,18 @@ def api_cliente_por_whatsapp(numero):
                 })
     return jsonify(None), 404
 
+@app.route('/api/reverter/<int:pag_id>', methods=['POST'])
+@api_key_required
+def api_reverter(pag_id):
+    """Reverte um pagamento (antifraude)."""
+    p = Pagamento.query.get_or_404(pag_id)
+    c = p.cliente
+    c.diarias_pagas  = max(0, c.diarias_pagas - p.diarias)
+    c.saldo_pendente = max(0.0, c.saldo_pendente - (p.valor - p.diarias * c.valor_diaria))
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify(ok=True, msg=f'Pagamento {pag_id} revertido')
+
 @app.route('/api/pagamentos_hoje/<int:id>')
 @api_key_required
 def api_pagamentos_hoje(id):
@@ -389,6 +401,7 @@ def api_pagar(id):
     db.session.commit()
     return jsonify(
         ok=True,
+        pag_id=p.id,
         diarias_pagas=c.diarias_pagas,
         diarias_novas=diarias_novas,
         dias_em_atraso=c.dias_em_atraso,
