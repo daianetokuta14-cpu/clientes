@@ -362,6 +362,14 @@ def api_cliente_por_whatsapp(numero):
                 })
     return jsonify(None), 404
 
+@app.route('/api/pagamentos_hoje/<int:id>')
+@api_key_required
+def api_pagamentos_hoje(id):
+    """Verifica se o cliente fez algum pagamento hoje."""
+    hoje = date.today().isoformat()
+    pag = Pagamento.query.filter_by(cliente_id=id, data=hoje).first()
+    return jsonify(pagou_hoje=pag is not None)
+
 @app.route('/api/pagar/<int:id>', methods=['POST'])
 @api_key_required
 def api_pagar(id):
@@ -379,7 +387,13 @@ def api_pagar(id):
     p = Pagamento(cliente_id=id, data=today(), valor=valor, diarias=diarias_novas, obs=obs)
     db.session.add(p)
     db.session.commit()
-    return jsonify(ok=True, diarias_pagas=c.diarias_pagas, diarias_novas=diarias_novas)
+    return jsonify(
+        ok=True,
+        diarias_pagas=c.diarias_pagas,
+        diarias_novas=diarias_novas,
+        dias_em_atraso=c.dias_em_atraso,
+        valor_em_atraso=c.valor_em_atraso
+    )
 
 if __name__ == '__main__':
     with app.app_context():
