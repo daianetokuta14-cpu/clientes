@@ -85,7 +85,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:0.75rem">
           <span class="hist-val">R$ {{ "%.2f"|format(p.valor) }}</span>
-          {% if role == 'owner' %}
+          {% if role == 'owner' or role == 'funcionario' %}
           <form method="post" action="/desfazer/{{ p.id }}" onsubmit="return confirm('Desfazer este pagamento?')">
             <button type="submit" class="btn btn-danger btn-sm" title="Desfazer">↩</button>
           </form>
