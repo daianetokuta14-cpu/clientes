@@ -237,6 +237,9 @@ def pagar(id):
     if valor <= 0:
         flash('Valor inválido.', 'error')
         return redirect(url_for('dashboard'))
+    if not c.valor_diaria or c.valor_diaria <= 0:
+        flash('Erro: valor da diária não configurado para este cliente. Edite o cliente primeiro.', 'error')
+        return redirect(url_for('editar', id=id))
     saldo            = c.saldo_pendente + valor
     diarias_novas    = int(saldo // c.valor_diaria)
     c.saldo_pendente = round(saldo % c.valor_diaria, 2)
@@ -407,6 +410,9 @@ def api_pagar(id):
 
     if valor <= 0:
         return jsonify(erro='Valor inválido'), 400
+
+    if not c.valor_diaria or c.valor_diaria <= 0:
+        return jsonify(erro=f'Cliente sem valor_diaria configurado — edite o cliente antes de registrar pagamento'), 400
 
     saldo            = c.saldo_pendente + valor
     diarias_novas    = int(saldo // c.valor_diaria)
