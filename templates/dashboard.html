@@ -95,18 +95,46 @@
     <p id="mPagarNome" style="color:var(--muted);font-size:0.85rem;margin-bottom:0.3rem"></p>
     <p id="mPagarSaldo" style="color:var(--warn);font-size:0.78rem;margin-bottom:0.75rem"></p>
     <form method="post" id="formPagar" action="">
-      <div class="form-group">
+
+      <!-- Modo: parcelas ou valor manual -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
+        <button type="button" id="btnModoParcelas" class="btn btn-primary btn-sm" onclick="setModo('parcelas')" style="flex:1">📦 Parcelas</button>
+        <button type="button" id="btnModoValor" class="btn btn-secondary btn-sm" onclick="setModo('valor')" style="flex:1">💵 Valor manual</button>
+      </div>
+
+      <!-- Seletor de parcelas -->
+      <div id="grupoParcelas" class="form-group">
+        <label>Quantas parcelas está pagando?</label>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem">
+          <button type="button" onclick="ajustarParcelas(-1)"
+            style="width:2.5rem;height:2.5rem;border-radius:50%;border:2px solid var(--accent);background:transparent;color:var(--accent);font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">−</button>
+          <div style="flex:1;text-align:center">
+            <div id="numParcelasDisplay" style="font-size:2.2rem;font-weight:800;color:var(--accent);font-family:var(--mono)">1</div>
+            <div id="rangeParcelasHint" style="font-size:0.7rem;color:var(--muted)">de X restantes</div>
+          </div>
+          <button type="button" onclick="ajustarParcelas(1)"
+            style="width:2.5rem;height:2.5rem;border-radius:50%;border:2px solid var(--accent);background:transparent;color:var(--accent);font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">+</button>
+        </div>
+        <div id="valorCalculado" style="text-align:center;margin-top:0.75rem;font-family:var(--mono);font-size:0.85rem;color:var(--text)"></div>
+      </div>
+
+      <!-- Campo valor manual -->
+      <div id="grupoValor" class="form-group" style="display:none">
         <label>Valor recebido (R$)</label>
-        <input type="number" name="valor" id="mPagarValor" step="0.01" min="0.01" required oninput="calcDiarias()" inputmode="decimal">
+        <input type="number" id="mPagarValorManual" step="0.01" min="0.01" inputmode="decimal" oninput="calcDiariasManual()">
         <div id="mPagarHint" style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-top:0.4rem"></div>
       </div>
+
+      <!-- Campo hidden que vai no form -->
+      <input type="hidden" name="valor" id="mPagarValor">
+
       <div class="form-group">
         <label>Observação (opcional)</label>
         <input type="text" name="obs" placeholder="Ex: Pix recebido">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalPagar').classList.remove('active')">Cancelar</button>
-        <button type="submit" class="btn btn-primary">Confirmar</button>
+        <button type="submit" class="btn btn-primary" onclick="return prepararSubmit()">Confirmar</button>
       </div>
     </form>
   </div>
@@ -138,7 +166,7 @@
 </div>
 
 <script>
-let _valorDia = 0, _saldoPend = 0;
+let _valorDia = 0, _saldoPend = 0, _restantes = 0, _numParcelas = 1, _modo = 'parcelas';
 
 function filtrarCards() {
   const busca = document.getElementById('busca').value.toLowerCase();
@@ -146,40 +174,79 @@ function filtrarCards() {
   let visiveis = 0;
   cards.forEach(card => {
     const nome = card.getAttribute('data-nome') || '';
-    if (nome.includes(busca)) {
-      card.style.display = ''; visiveis++;
-    } else {
-      card.style.display = 'none';
-    }
+    if (nome.includes(busca)) { card.style.display = ''; visiveis++; }
+    else { card.style.display = 'none'; }
   });
   document.getElementById('semResultado').style.display = visiveis === 0 ? 'block' : 'none';
 }
 
-function abrirPagar(id, nome, valorDia, restantes, saldo) {
-  _valorDia = valorDia; _saldoPend = saldo;
-  document.getElementById('mPagarNome').textContent = nome + ' · ' + restantes + ' diária(s) restantes';
-  document.getElementById('mPagarSaldo').textContent = saldo > 0 ? 'Saldo pendente: R$ ' + saldo.toFixed(2) : '';
-  document.getElementById('mPagarValor').value = '';
-  document.getElementById('mPagarHint').textContent = 'Valor por diária: R$ ' + valorDia.toFixed(2);
-  document.getElementById('formPagar').action = '/pagar/' + id;
-  document.getElementById('modalPagar').classList.add('active');
-  setTimeout(() => document.getElementById('mPagarValor').focus(), 100);
+function setModo(modo) {
+  _modo = modo;
+  document.getElementById('grupoParcelas').style.display = modo === 'parcelas' ? 'block' : 'none';
+  document.getElementById('grupoValor').style.display    = modo === 'valor'    ? 'block' : 'none';
+  document.getElementById('btnModoParcelas').className   = modo === 'parcelas' ? 'btn btn-primary btn-sm'   : 'btn btn-secondary btn-sm';
+  document.getElementById('btnModoValor').className      = modo === 'valor'    ? 'btn btn-primary btn-sm'   : 'btn btn-secondary btn-sm';
 }
-function calcDiarias() {
-  const v = parseFloat(document.getElementById('mPagarValor').value) || 0;
-  if (v <= 0) return;
-  const total = v + _saldoPend;
+
+function atualizarDisplayParcelas() {
+  document.getElementById('numParcelasDisplay').textContent = _numParcelas;
+  document.getElementById('rangeParcelasHint').textContent  = 'de ' + _restantes + ' restante(s)';
+  const valorTotal  = _numParcelas * _valorDia;
+  const valorCobrar = Math.max(0, valorTotal - _saldoPend);
+  const descSaldo   = _saldoPend > 0 ? '<br><span style="font-size:0.7rem;color:var(--muted)">Saldo pendente R$ ' + _saldoPend.toFixed(2) + ' abatido</span>' : '';
+  document.getElementById('valorCalculado').innerHTML =
+    '<span style="color:var(--muted)">Valor a receber:</span> ' +
+    '<span style="color:var(--accent);font-weight:700">R$ ' + valorCobrar.toFixed(2) + '</span>' + descSaldo;
+}
+
+function ajustarParcelas(delta) {
+  _numParcelas = Math.min(_restantes, Math.max(1, _numParcelas + delta));
+  atualizarDisplayParcelas();
+}
+
+function calcDiariasManual() {
+  const v = parseFloat(document.getElementById('mPagarValorManual').value) || 0;
+  if (!v) { document.getElementById('mPagarHint').textContent = 'Valor por diária: R$ ' + _valorDia.toFixed(2); return; }
+  const total   = v + _saldoPend;
   const diarias = Math.floor(total / _valorDia);
-  const sobra = (total % _valorDia).toFixed(2);
+  const sobra   = (total % _valorDia).toFixed(2);
   document.getElementById('mPagarHint').textContent = diarias > 0
     ? '+' + diarias + ' diária(s). Saldo restante: R$ ' + sobra
-    : 'Parcial. Saldo acumulado: R$ ' + total.toFixed(2) + ' (faltam R$ ' + (_valorDia - total).toFixed(2) + ')';
+    : 'Parcial — acumulado R$ ' + total.toFixed(2) + ' (faltam R$ ' + (_valorDia - total).toFixed(2) + ')';
 }
+
+function prepararSubmit() {
+  if (_modo === 'parcelas') {
+    const valorCobrar = Math.max(0.01, _numParcelas * _valorDia - _saldoPend);
+    document.getElementById('mPagarValor').value = valorCobrar.toFixed(2);
+  } else {
+    const v = parseFloat(document.getElementById('mPagarValorManual').value) || 0;
+    if (v <= 0) { alert('Digite um valor válido.'); return false; }
+    document.getElementById('mPagarValor').value = v.toFixed(2);
+  }
+  return true;
+}
+
+function abrirPagar(id, nome, valorDia, restantes, saldo) {
+  _valorDia    = valorDia;
+  _saldoPend   = saldo;
+  _restantes   = restantes;
+  _numParcelas = 1;
+  document.getElementById('mPagarNome').textContent  = nome + ' · ' + restantes + ' diária(s) restantes';
+  document.getElementById('mPagarSaldo').textContent = saldo > 0 ? 'Saldo pendente: R$ ' + saldo.toFixed(2) : '';
+  document.getElementById('mPagarValorManual').value = '';
+  document.getElementById('mPagarHint').textContent  = 'Valor por diária: R$ ' + valorDia.toFixed(2);
+  document.getElementById('formPagar').action = '/pagar/' + id;
+  setModo('parcelas');
+  atualizarDisplayParcelas();
+  document.getElementById('modalPagar').classList.add('active');
+}
+
 function abrirRenovar(id, nome, valorAtual) {
   document.getElementById('mRenovarNome').textContent = nome;
   document.getElementById('mRenovarValor').value = valorAtual.toFixed(2);
-  document.getElementById('mRenovarData').value = new Date().toISOString().split('T')[0];
-  document.getElementById('formRenovar').action = '/renovar/' + id;
+  document.getElementById('mRenovarData').value  = new Date().toISOString().split('T')[0];
+  document.getElementById('formRenovar').action  = '/renovar/' + id;
   document.getElementById('modalRenovar').classList.add('active');
 }
 </script>
