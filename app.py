@@ -54,6 +54,17 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    # Migration manual: adiciona colunas novas sem derrubar o banco existente
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(db.text(
+                "ALTER TABLE pagamento "
+                "ADD COLUMN IF NOT EXISTS hash_arquivo VARCHAR(64) DEFAULT '', "
+                "ADD COLUMN IF NOT EXISTS codigo_tx VARCHAR(100) DEFAULT ''"
+            ))
+            conn.commit()
+    except Exception as _e:
+        print(f"[MIGRATION] Aviso ao adicionar colunas (pode já existir): {_e}")
 
 # ── Decorators ───────────────────────────────────────────────────
 
@@ -258,7 +269,6 @@ def pagar(id):
 
 @app.route('/desfazer/<int:pag_id>', methods=['POST'])
 @login_required
-@owner_required
 def desfazer(pag_id):
     p  = Pagamento.query.get_or_404(pag_id)
     c  = p.cliente
