@@ -371,22 +371,21 @@ def api_cliente_por_whatsapp(numero):
 @api_key_required
 def api_verificar_comprovante():
     """
-    Verifica se hash ou código TX já existem no banco.
+    Verifica se o código de transação (TX ID do PIX) já existe no banco.
     Retorna: {duplicado: bool, motivo: str}
     """
     data      = request.json or {}
-    hash_arq  = data.get('hash_arquivo', '')
-    codigo_tx = data.get('codigo_tx', '')
+    codigo_tx = (data.get('codigo_tx') or '').strip()
 
-    if hash_arq:
-        p = Pagamento.query.filter_by(hash_arquivo=hash_arq).first()
-        if p:
-            return jsonify(duplicado=True, motivo=f'Arquivo já enviado (pagamento #{p.id} em {p.data})')
+    if not codigo_tx:
+        return jsonify(duplicado=False, motivo='')
 
-    if codigo_tx:
-        p = Pagamento.query.filter_by(codigo_tx=codigo_tx).first()
-        if p:
-            return jsonify(duplicado=True, motivo=f'Código de transação já registrado (pagamento #{p.id} em {p.data})')
+    p = Pagamento.query.filter(
+        Pagamento.codigo_tx == codigo_tx,
+        Pagamento.codigo_tx != ''
+    ).first()
+    if p:
+        return jsonify(duplicado=True, motivo=f'TX ID já registrado (pagamento #{p.id} em {p.data})')
 
     return jsonify(duplicado=False, motivo='')
 
