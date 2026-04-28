@@ -43,7 +43,10 @@ class Cliente(db.Model):
 
     @property
     def total_pago(self):
-        return sum(p.valor for p in self.pagamentos)
+        """Soma apenas os pagamentos do contrato atual (a partir de data_inicio)."""
+        if not self.data_inicio:
+            return sum(p.valor for p in self.pagamentos)
+        return sum(p.valor for p in self.pagamentos if p.data >= self.data_inicio)
 
     @property
     def pct(self):
