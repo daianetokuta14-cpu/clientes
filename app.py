@@ -15,11 +15,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# ── Segurança: força SECRET_KEY forte no ambiente ────────────────
 if not app.config['SECRET_KEY']:
-    raise RuntimeError("SECRET_KEY não configurada! Defina a variável de ambiente SECRET_KEY.")
+    raise RuntimeError("SECRET_KEY não configurada!")
 
-# ── PINs via variável de ambiente APENAS ────────────────────────
 PINS = {
     'owner':       os.environ.get('PIN_OWNER', ''),
     'funcionario': os.environ.get('PIN_FUNC',  ''),
@@ -27,23 +25,19 @@ PINS = {
 if not PINS['owner'] or not PINS['funcionario']:
     raise RuntimeError("PIN_OWNER e PIN_FUNC devem ser definidos como variáveis de ambiente!")
 
-# ── API Key do bot via variável de ambiente APENAS ───────────────
 BOT_API_KEY = os.environ.get('BOT_API_KEY', '')
 if not BOT_API_KEY:
     raise RuntimeError("BOT_API_KEY não configurada!")
 
-# ── Rate limit simples para login (evita força bruta) ───────────
-_login_attempts = {}  # ip -> (tentativas, timestamp_primeiro)
+_login_attempts = {}
 MAX_TENTATIVAS  = 5
-JANELA_SEGUNDOS = 300  # 5 minutos
+JANELA_SEGUNDOS = 300
 
-def check_rate_limit(ip: str) -> bool:
-    """Retorna True se o IP está bloqueado."""
+def check_rate_limit(ip):
     now = time.time()
     if ip in _login_attempts:
         tentativas, primeiro = _login_attempts[ip]
         if now - primeiro > JANELA_SEGUNDOS:
-            # Janela expirou, reseta
             _login_attempts[ip] = (1, now)
             return False
         if tentativas >= MAX_TENTATIVAS:
@@ -53,7 +47,7 @@ def check_rate_limit(ip: str) -> bool:
         _login_attempts[ip] = (1, now)
     return False
 
-def reset_rate_limit(ip: str):
+def reset_rate_limit(ip):
     _login_attempts.pop(ip, None)
 
 db.init_app(app)
@@ -61,7 +55,7 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-# ── Decorators de autenticação ───────────────────────────────────
+# ── Decorators ───────────────────────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -83,7 +77,6 @@ def owner_required(f):
 def api_key_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Aceita APENAS via header — nunca via URL (evita logs com key exposta)
         key = request.headers.get('X-API-Key')
         if not key or key != BOT_API_KEY:
             return jsonify(erro="não autorizado"), 403
@@ -112,28 +105,20 @@ def salvar_arquivo(file):
 def login():
     if 'role' in session:
         return redirect(url_for('dashboard'))
-
     ip = request.remote_addr
     error = None
-
     if request.method == 'POST':
-        # Verifica rate limit antes de checar PIN
         if check_rate_limit(ip):
-            minutos = JANELA_SEGUNDOS // 60
-            error = f'Muitas tentativas. Aguarde {minutos} minutos.'
+            error = f'Muitas tentativas. Aguarde {JANELA_SEGUNDOS // 60} minutos.'
             return render_template('login.html', error=error)
-
         role = request.form.get('role')
         pin  = request.form.get('pin', '')
-
         if role in PINS and pin == PINS[role]:
             reset_rate_limit(ip)
             session['role'] = role
-            session.permanent = False  # sessão expira ao fechar o browser
+            session.permanent = False
             return redirect(url_for('dashboard'))
-
         error = 'PIN incorreto. Tente novamente.'
-
     return render_template('login.html', error=error)
 
 @app.route('/logout')
@@ -144,31 +129,26 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    clientes = Cliente.query.filter_by(ativo=True).all()
-    pags_hoje = Pagamento.query.filter_by(data=today()).all()
+    clientes   = Cliente.query.filter_by(ativo=True).all()
+    pags_hoje  = Pagamento.query.filter_by(data=today()).all()
     total_hoje = sum(p.valor for p in pags_hoje)
-    mes = this_month()
-    pags_mes = Pagamento.query.filter(Pagamento.data.startswith(mes)).all()
-    total_mes = sum(p.valor for p in pags_mes)
+    mes        = this_month()
+    pags_mes   = Pagamento.query.filter(Pagamento.data.startswith(mes)).all()
+    total_mes  = sum(p.valor for p in pags_mes)
     ativos     = [c for c in clientes if c.diarias_pagas < 20]
     aguardando = [c for c in clientes if c.diarias_pagas >= 20]
     em_atraso  = [c for c in ativos if c.dias_em_atraso > 0]
     return render_template('dashboard.html',
-        clientes=clientes,
-        ativos=len(ativos),
-        aguardando=len(aguardando),
-        em_atraso=len(em_atraso),
-        total_hoje=total_hoje,
-        total_mes=total_mes,
-        role=session['role'],
-        hoje=today()
+        clientes=clientes, ativos=len(ativos), aguardando=len(aguardando),
+        em_atraso=len(em_atraso), total_hoje=total_hoje, total_mes=total_mes,
+        role=session['role'], hoje=today()
     )
 
 @app.route('/clientes')
 @login_required
 def clientes():
     filtro = request.args.get('f', 'todos')
-    todos = Cliente.query.order_by(Cliente.criado_em.desc()).all()
+    todos  = Cliente.query.order_by(Cliente.criado_em.desc()).all()
     if filtro == 'ativos':
         lista = [c for c in todos if c.ativo and c.diarias_pagas < 20]
     elif filtro == 'aguardando':
@@ -191,8 +171,6 @@ def cadastrar():
         if not nome or valor <= 0:
             flash('Preencha todos os campos corretamente.', 'error')
             return redirect(url_for('cadastrar'))
-        foto_data    = salvar_arquivo(request.files.get('foto'))
-        arquivo_data = salvar_arquivo(request.files.get('arquivo'))
         c = Cliente(
             nome=nome,
             whatsapp=request.form.get('whatsapp', '').strip(),
@@ -203,8 +181,8 @@ def cadastrar():
             chave_pix=request.form.get('chave_pix', '').strip(),
             valor_diaria=valor,
             data_inicio=dt,
-            foto_url=foto_data,
-            arquivo_url=arquivo_data
+            foto_url=salvar_arquivo(request.files.get('foto')),
+            arquivo_url=salvar_arquivo(request.files.get('arquivo'))
         )
         db.session.add(c)
         db.session.commit()
@@ -259,11 +237,11 @@ def pagar(id):
     if valor <= 0:
         flash('Valor inválido.', 'error')
         return redirect(url_for('dashboard'))
-    saldo = c.saldo_pendente + valor
-    diarias_novas = int(saldo // c.valor_diaria)
+    saldo            = c.saldo_pendente + valor
+    diarias_novas    = int(saldo // c.valor_diaria)
     c.saldo_pendente = round(saldo % c.valor_diaria, 2)
-    diarias_novas = min(diarias_novas, 20 - c.diarias_pagas)
-    c.diarias_pagas = min(20, c.diarias_pagas + diarias_novas)
+    diarias_novas    = min(diarias_novas, 20 - c.diarias_pagas)
+    c.diarias_pagas  = min(20, c.diarias_pagas + diarias_novas)
     p = Pagamento(cliente_id=id, data=today(), valor=valor, diarias=diarias_novas, obs=obs)
     db.session.add(p)
     db.session.commit()
@@ -281,7 +259,7 @@ def pagar(id):
 def desfazer(pag_id):
     p  = Pagamento.query.get_or_404(pag_id)
     c  = p.cliente
-    c.diarias_pagas = max(0, c.diarias_pagas - p.diarias)
+    c.diarias_pagas  = max(0, c.diarias_pagas - p.diarias)
     c.saldo_pendente = max(0.0, c.saldo_pendente - (p.valor - p.diarias * c.valor_diaria))
     cid = c.id
     db.session.delete(p)
@@ -292,7 +270,7 @@ def desfazer(pag_id):
 @app.route('/renovar/<int:id>', methods=['POST'])
 @login_required
 def renovar(id):
-    c = Cliente.query.get_or_404(id)
+    c          = Cliente.query.get_or_404(id)
     novo_valor = float(request.form['valor_diaria'])
     nova_data  = request.form.get('data_inicio') or today()
     hist = ContratoHistorico(
@@ -340,6 +318,33 @@ def api_stats():
     em_atraso  = len([c for c in ativos if c.dias_em_atraso > 0])
     return jsonify(total_mes=total_mes, total_hoje=total_hoje, em_atraso=em_atraso)
 
+@app.route('/api/clientes_ativos')
+@api_key_required
+def api_clientes_ativos():
+    """Retorna todos os clientes ativos com TODOS os dados — usado no backup 23:50 e como base para restore."""
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
+    lista = []
+    for c in clientes:
+        lista.append({
+            'id':              c.id,
+            'nome':            c.nome,
+            'whatsapp':        c.whatsapp or '',
+            'cpf':             c.cpf or '',
+            'limite':          c.limite,
+            'endereco':        c.endereco or '',
+            'email':           c.email or '',
+            'chave_pix':       c.chave_pix or '',
+            'valor_diaria':    c.valor_diaria,
+            'data_inicio':     c.data_inicio or '',
+            'diarias_pagas':   c.diarias_pagas,
+            'saldo_pendente':  c.saldo_pendente,
+            'dias_em_atraso':  c.dias_em_atraso,
+            'valor_em_atraso': c.valor_em_atraso,
+            'status':          c.status,
+        })
+    return jsonify(lista)
+
+
 @app.route('/api/cliente_por_whatsapp/<numero>')
 @api_key_required
 def api_cliente_por_whatsapp(numero):
@@ -362,43 +367,62 @@ def api_cliente_por_whatsapp(numero):
                 })
     return jsonify(None), 404
 
-@app.route('/api/reverter/<int:pag_id>', methods=['POST'])
+@app.route('/api/verificar_comprovante', methods=['POST'])
 @api_key_required
-def api_reverter(pag_id):
-    """Reverte um pagamento (antifraude)."""
-    p = Pagamento.query.get_or_404(pag_id)
-    c = p.cliente
-    c.diarias_pagas  = max(0, c.diarias_pagas - p.diarias)
-    c.saldo_pendente = max(0.0, c.saldo_pendente - (p.valor - p.diarias * c.valor_diaria))
-    db.session.delete(p)
-    db.session.commit()
-    return jsonify(ok=True, msg=f'Pagamento {pag_id} revertido')
+def api_verificar_comprovante():
+    """
+    Verifica se hash ou código TX já existem no banco.
+    Retorna: {duplicado: bool, motivo: str}
+    """
+    data      = request.json or {}
+    hash_arq  = data.get('hash_arquivo', '')
+    codigo_tx = data.get('codigo_tx', '')
+
+    if hash_arq:
+        p = Pagamento.query.filter_by(hash_arquivo=hash_arq).first()
+        if p:
+            return jsonify(duplicado=True, motivo=f'Arquivo já enviado (pagamento #{p.id} em {p.data})')
+
+    if codigo_tx:
+        p = Pagamento.query.filter_by(codigo_tx=codigo_tx).first()
+        if p:
+            return jsonify(duplicado=True, motivo=f'Código de transação já registrado (pagamento #{p.id} em {p.data})')
+
+    return jsonify(duplicado=False, motivo='')
 
 @app.route('/api/pagamentos_hoje/<int:id>')
 @api_key_required
 def api_pagamentos_hoje(id):
-    """Verifica se o cliente fez algum pagamento hoje."""
-    hoje = date.today().isoformat()
-    pag = Pagamento.query.filter_by(cliente_id=id, data=hoje).first()
+    pag = Pagamento.query.filter_by(cliente_id=id, data=today()).first()
     return jsonify(pagou_hoje=pag is not None)
 
 @app.route('/api/pagar/<int:id>', methods=['POST'])
 @api_key_required
 def api_pagar(id):
-    c     = Cliente.query.get_or_404(id)
-    data  = request.json or {}
-    valor = float(data.get('valor', 0))
-    obs   = data.get('obs', 'Pago via bot WhatsApp')
+    c         = Cliente.query.get_or_404(id)
+    data      = request.json or {}
+    valor     = float(data.get('valor', 0))
+    obs       = data.get('obs', 'Pago via bot WhatsApp')
+    hash_arq  = data.get('hash_arquivo', '')
+    codigo_tx = data.get('codigo_tx', '')
+
     if valor <= 0:
         return jsonify(erro='Valor inválido'), 400
+
     saldo            = c.saldo_pendente + valor
     diarias_novas    = int(saldo // c.valor_diaria)
     c.saldo_pendente = round(saldo % c.valor_diaria, 2)
     diarias_novas    = min(diarias_novas, 20 - c.diarias_pagas)
     c.diarias_pagas  = min(20, c.diarias_pagas + diarias_novas)
-    p = Pagamento(cliente_id=id, data=today(), valor=valor, diarias=diarias_novas, obs=obs)
+
+    p = Pagamento(
+        cliente_id=id, data=today(), valor=valor,
+        diarias=diarias_novas, obs=obs,
+        hash_arquivo=hash_arq, codigo_tx=codigo_tx
+    )
     db.session.add(p)
     db.session.commit()
+
     return jsonify(
         ok=True,
         pag_id=p.id,
@@ -407,6 +431,102 @@ def api_pagar(id):
         dias_em_atraso=c.dias_em_atraso,
         valor_em_atraso=c.valor_em_atraso
     )
+
+@app.route('/api/reverter/<int:pag_id>', methods=['POST'])
+@api_key_required
+def api_reverter(pag_id):
+    p = Pagamento.query.get_or_404(pag_id)
+    c = p.cliente
+    c.diarias_pagas  = max(0, c.diarias_pagas - p.diarias)
+    c.saldo_pendente = max(0.0, c.saldo_pendente - (p.valor - p.diarias * c.valor_diaria))
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify(ok=True, msg=f'Pagamento {pag_id} revertido')
+
+@app.route('/api/upsert_clientes', methods=['POST'])
+@api_key_required
+def api_upsert_clientes():
+    """
+    Recebe lista de clientes do backup e sincroniza o banco.
+    - Se cliente não existe (por nome+whatsapp): cadastra com todos os dados.
+    - Se existe e diarias_pagas no backup > atual: atualiza.
+    - Se igual ou menor: ignora.
+    Retorna contadores de cadastrados / atualizados / ignorados.
+    """
+    dados = request.json or {}
+    clientes_backup = dados.get('clientes', [])
+
+    if not clientes_backup:
+        return jsonify(erro='Lista de clientes vazia'), 400
+
+    cadastrados = 0
+    atualizados = 0
+    ignorados   = 0
+    erros       = []
+
+    for item in clientes_backup:
+        try:
+            nome        = (item.get('nome') or '').strip()
+            whatsapp    = re.sub(r'\D', '', item.get('whatsapp') or '')
+            diarias_bkp = int(item.get('diarias_pagas') or 0)
+
+            if not nome:
+                erros.append('Item sem nome ignorado')
+                continue
+
+            # Tenta localizar pelo whatsapp (mais preciso) ou pelo nome
+            cliente = None
+            if whatsapp:
+                cliente = Cliente.query.filter_by(whatsapp=whatsapp, ativo=True).first()
+            if not cliente:
+                cliente = Cliente.query.filter(
+                    Cliente.nome.ilike(nome), Cliente.ativo == True
+                ).first()
+
+            if cliente:
+                # Cliente já existe — atualiza só se backup tem mais diárias
+                if diarias_bkp > cliente.diarias_pagas:
+                    cliente.diarias_pagas = diarias_bkp
+                    db.session.commit()
+                    atualizados += 1
+                else:
+                    ignorados += 1
+            else:
+                # Cadastra novo cliente com todos os dados do backup
+                valor_diaria = float(item.get('valor_diaria') or 0)
+                if not valor_diaria:
+                    erros.append(f'{nome}: valor_diaria ausente, não cadastrado')
+                    continue
+
+                novo = Cliente(
+                    nome            = nome,
+                    whatsapp        = whatsapp or None,
+                    cpf             = item.get('cpf') or '',
+                    limite          = float(item.get('limite') or 0),
+                    endereco        = item.get('endereco') or '',
+                    email           = item.get('email') or '',
+                    chave_pix       = item.get('chave_pix') or '',
+                    valor_diaria    = valor_diaria,
+                    data_inicio     = item.get('data_inicio') or date.today().isoformat(),
+                    diarias_pagas   = diarias_bkp,
+                    saldo_pendente  = float(item.get('saldo_pendente') or 0),
+                    ativo           = True,
+                )
+                db.session.add(novo)
+                db.session.commit()
+                cadastrados += 1
+
+        except Exception as e:
+            erros.append(f'{item.get("nome","?")} — {str(e)}')
+
+    return jsonify(
+        ok          = True,
+        cadastrados = cadastrados,
+        atualizados = atualizados,
+        ignorados   = ignorados,
+        erros       = erros,
+    )
+
 
 if __name__ == '__main__':
     with app.app_context():
