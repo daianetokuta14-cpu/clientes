@@ -267,7 +267,24 @@ def pagar(id):
         flash(f'+{diarias_novas} diária(s) para {c.nome}. Total: {c.diarias_pagas}/20.', 'success')
     return redirect(url_for('dashboard'))
 
-@app.route('/desfazer/<int:pag_id>', methods=['POST'])
+@app.route('/estornar/<int:id>', methods=['POST'])
+@login_required
+def estornar(id):
+    c        = Cliente.query.get_or_404(id)
+    qtd      = int(request.form.get('diarias', 1))
+    obs      = request.form.get('obs', '').strip()
+    qtd      = max(1, min(qtd, c.diarias_pagas))  # entre 1 e o máximo atual
+    c.diarias_pagas  = max(0, c.diarias_pagas - qtd)
+    c.saldo_pendente = 0.0  # zera saldo ao estornar
+    valor_estorno    = round(qtd * c.valor_diaria, 2)
+    p = Pagamento(cliente_id=id, data=today(), valor=-valor_estorno, diarias=-qtd,
+                  obs=f'[ESTORNO] {obs}' if obs else '[ESTORNO]')
+    db.session.add(p)
+    db.session.commit()
+    flash(f'−{qtd} diária(s) estornada(s) de {c.nome}. Total: {c.diarias_pagas}/20.', 'warn')
+    return redirect(url_for('dashboard'))
+
+
 @login_required
 def desfazer(pag_id):
     p  = Pagamento.query.get_or_404(pag_id)
