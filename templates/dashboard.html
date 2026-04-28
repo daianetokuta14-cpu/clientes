@@ -67,7 +67,7 @@
         {% if c.status == 'aguardando' %}
           <button class="btn btn-success btn-sm" onclick="abrirRenovar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }})">↻ Renovar</button>
         {% else %}
-          <button class="btn btn-primary btn-sm" onclick="abrirPagar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }}, {{ 20 - c.diarias_pagas }}, {{ c.saldo_pendente }})">✓ Pagar</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirPagar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }}, {{ 20 - c.diarias_pagas }}, {{ c.saldo_pendente }}, {{ c.diarias_pagas }})">✓ Pagar</button>
         {% endif %}
         <a href="/editar/{{ c.id }}" class="btn btn-secondary btn-sm">✎ Editar</a>
         {% if role == 'owner' %}
@@ -100,6 +100,7 @@
       <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
         <button type="button" id="btnModoParcelas" class="btn btn-primary btn-sm" onclick="setModo('parcelas')" style="flex:1">📦 Parcelas</button>
         <button type="button" id="btnModoValor" class="btn btn-secondary btn-sm" onclick="setModo('valor')" style="flex:1">💵 Valor manual</button>
+        <button type="button" id="btnModoRemover" class="btn btn-secondary btn-sm" onclick="setModo('remover')" style="flex:1;border-color:var(--danger);color:var(--danger)">↩ Remover</button>
       </div>
 
       <!-- Seletor de parcelas -->
@@ -123,6 +124,22 @@
         <label>Valor recebido (R$)</label>
         <input type="number" id="mPagarValorManual" step="0.01" min="0.01" inputmode="decimal" oninput="calcDiariasManual()">
         <div id="mPagarHint" style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-top:0.4rem"></div>
+      </div>
+
+      <!-- Modo remover parcelas -->
+      <div id="grupoRemover" class="form-group" style="display:none">
+        <label>Quantas parcelas remover?</label>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem">
+          <button type="button" onclick="ajustarRemover(-1)"
+            style="width:2.5rem;height:2.5rem;border-radius:50%;border:2px solid var(--danger);background:transparent;color:var(--danger);font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">−</button>
+          <div style="flex:1;text-align:center">
+            <div id="numRemoverDisplay" style="font-size:2.2rem;font-weight:800;color:var(--danger);font-family:var(--mono)">1</div>
+            <div id="rangeRemoverHint" style="font-size:0.7rem;color:var(--muted)">máximo X</div>
+          </div>
+          <button type="button" onclick="ajustarRemover(1)"
+            style="width:2.5rem;height:2.5rem;border-radius:50%;border:2px solid var(--danger);background:transparent;color:var(--danger);font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">+</button>
+        </div>
+        <div id="valorEstorno" style="text-align:center;margin-top:0.75rem;font-family:var(--mono);font-size:0.85rem"></div>
       </div>
 
       <!-- Campo hidden que vai no form -->
@@ -166,7 +183,7 @@
 </div>
 
 <script>
-let _valorDia = 0, _saldoPend = 0, _restantes = 0, _numParcelas = 1, _modo = 'parcelas';
+let _valorDia = 0, _saldoPend = 0, _restantes = 0, _diariasAtuais = 0, _numParcelas = 1, _numRemover = 1, _modo = 'parcelas', _clienteId = 0;
 
 function filtrarCards() {
   const busca = document.getElementById('busca').value.toLowerCase();
@@ -184,8 +201,17 @@ function setModo(modo) {
   _modo = modo;
   document.getElementById('grupoParcelas').style.display = modo === 'parcelas' ? 'block' : 'none';
   document.getElementById('grupoValor').style.display    = modo === 'valor'    ? 'block' : 'none';
-  document.getElementById('btnModoParcelas').className   = modo === 'parcelas' ? 'btn btn-primary btn-sm'   : 'btn btn-secondary btn-sm';
-  document.getElementById('btnModoValor').className      = modo === 'valor'    ? 'btn btn-primary btn-sm'   : 'btn btn-secondary btn-sm';
+  document.getElementById('grupoRemover').style.display  = modo === 'remover'  ? 'block' : 'none';
+  document.getElementById('btnModoParcelas').className = modo === 'parcelas' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  document.getElementById('btnModoValor').className    = modo === 'valor'    ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  const btnR = document.getElementById('btnModoRemover');
+  btnR.style.borderColor = modo === 'remover' ? 'var(--danger)' : '';
+  btnR.style.color       = 'var(--danger)';
+  btnR.style.background  = modo === 'remover' ? 'rgba(255,80,80,0.12)' : '';
+  // troca action do form
+  document.getElementById('formPagar').action = modo === 'remover'
+    ? '/estornar/' + _clienteId
+    : '/pagar/'   + _clienteId;
 }
 
 function atualizarDisplayParcelas() {
@@ -199,9 +225,23 @@ function atualizarDisplayParcelas() {
     '<span style="color:var(--accent);font-weight:700">R$ ' + valorCobrar.toFixed(2) + '</span>' + descSaldo;
 }
 
+function atualizarDisplayRemover() {
+  document.getElementById('numRemoverDisplay').textContent = _numRemover;
+  document.getElementById('rangeRemoverHint').textContent  = 'máximo ' + _diariasAtuais;
+  const valorEstorno = _numRemover * _valorDia;
+  document.getElementById('valorEstorno').innerHTML =
+    '<span style="color:var(--muted)">Será estornado:</span> ' +
+    '<span style="color:var(--danger);font-weight:700">−R$ ' + valorEstorno.toFixed(2) + '</span>';
+}
+
 function ajustarParcelas(delta) {
   _numParcelas = Math.min(_restantes, Math.max(1, _numParcelas + delta));
   atualizarDisplayParcelas();
+}
+
+function ajustarRemover(delta) {
+  _numRemover = Math.min(_diariasAtuais, Math.max(1, _numRemover + delta));
+  atualizarDisplayRemover();
 }
 
 function calcDiariasManual() {
@@ -216,6 +256,15 @@ function calcDiariasManual() {
 }
 
 function prepararSubmit() {
+  if (_modo === 'remover') {
+    if (_diariasAtuais === 0) { alert('Cliente já está em zero diárias.'); return false; }
+    document.getElementById('mPagarValor').value = _numRemover;
+    document.getElementById('formPagar').action  = '/estornar/' + _clienteId;
+    // troca o name do campo hidden para "diarias"
+    document.getElementById('mPagarValor').name  = 'diarias';
+    return confirm('Remover ' + _numRemover + ' diária(s) de ' + document.getElementById('mPagarNome').textContent.split(' · ')[0] + '?');
+  }
+  document.getElementById('mPagarValor').name = 'valor';
   if (_modo === 'parcelas') {
     const valorCobrar = Math.max(0.01, _numParcelas * _valorDia - _saldoPend);
     document.getElementById('mPagarValor').value = valorCobrar.toFixed(2);
@@ -227,18 +276,22 @@ function prepararSubmit() {
   return true;
 }
 
-function abrirPagar(id, nome, valorDia, restantes, saldo) {
-  _valorDia    = valorDia;
-  _saldoPend   = saldo;
-  _restantes   = restantes;
-  _numParcelas = 1;
+function abrirPagar(id, nome, valorDia, restantes, saldo, diariasAtuais) {
+  _clienteId    = id;
+  _valorDia     = valorDia;
+  _saldoPend    = saldo;
+  _restantes    = restantes;
+  _diariasAtuais = diariasAtuais;
+  _numParcelas  = 1;
+  _numRemover   = 1;
   document.getElementById('mPagarNome').textContent  = nome + ' · ' + restantes + ' diária(s) restantes';
   document.getElementById('mPagarSaldo').textContent = saldo > 0 ? 'Saldo pendente: R$ ' + saldo.toFixed(2) : '';
   document.getElementById('mPagarValorManual').value = '';
   document.getElementById('mPagarHint').textContent  = 'Valor por diária: R$ ' + valorDia.toFixed(2);
-  document.getElementById('formPagar').action = '/pagar/' + id;
+  document.getElementById('mPagarValor').name = 'valor';
   setModo('parcelas');
   atualizarDisplayParcelas();
+  atualizarDisplayRemover();
   document.getElementById('modalPagar').classList.add('active');
 }
 
