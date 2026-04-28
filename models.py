@@ -71,13 +71,15 @@ class Cliente(db.Model):
 
 
 class Pagamento(db.Model):
-    id          = db.Column(db.Integer, primary_key=True)
-    cliente_id  = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
-    data        = db.Column(db.String(10), default=lambda: date.today().isoformat())
-    valor       = db.Column(db.Float, nullable=False)
-    diarias     = db.Column(db.Integer, default=0)
-    obs         = db.Column(db.String(300), default='')
-    criado_em   = db.Column(db.DateTime, default=datetime.utcnow)
+    id             = db.Column(db.Integer, primary_key=True)
+    cliente_id     = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
+    data           = db.Column(db.String(10), default=lambda: date.today().isoformat())
+    valor          = db.Column(db.Float, nullable=False)
+    diarias        = db.Column(db.Integer, default=0)
+    obs            = db.Column(db.String(300), default='')
+    hash_arquivo   = db.Column(db.String(64), default='')   # SHA-256 do comprovante
+    codigo_tx      = db.Column(db.String(100), default='')  # EndToEnd ID / TxID do PIX
+    criado_em      = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class ContratoHistorico(db.Model):
