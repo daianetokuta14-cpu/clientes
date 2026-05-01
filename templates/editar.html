@@ -8,9 +8,13 @@
       {% if c.status == 'aguardando' %}
       <button class="btn btn-success" onclick="abrirRenovar()">↻ Renovar Contrato</button>
       {% endif %}
+      <button class="btn btn-secondary" onclick="copiarLink()" title="Copiar link do cliente">🔗 Link</button>
       {% if role == 'owner' %}
       <form method="post" action="/apagar/{{ c.id }}" onsubmit="return confirm('Apagar {{ c.nome }} permanentemente?')">
         <button type="submit" class="btn btn-danger">✕ Apagar Cliente</button>
+      </form>
+      <form method="post" action="/gerar_link/{{ c.id }}" onsubmit="return confirm('Gerar novo link? O link antigo para de funcionar.')">
+        <button type="submit" class="btn btn-secondary" title="Gerar novo link">↺ Novo link</button>
       </form>
       {% endif %}
     </div>
@@ -173,5 +177,13 @@ if (waInput) waInput.addEventListener('input', function() {
   v = v.replace(/(\d{5})(\d)/,'$1-$2');
   this.value = v;
 });
+function copiarLink() {
+  const link = window.location.origin + '/c/{{ c.token_link }}';
+  navigator.clipboard.writeText(link).then(() => {
+    alert('Link copiado:\n' + link);
+  }).catch(() => {
+    prompt('Copie o link abaixo:', link);
+  });
+}
 </script>
 {% endblock %}
