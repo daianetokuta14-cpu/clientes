@@ -80,7 +80,7 @@
       {% for p in pags %}
       <div class="hist-item">
         <div>
-          <div class="nome-col" style="font-size:0.88rem">{{ p.data|replace('-','/')|truncate(10,true,'') }}</div>
+          <div class="nome-col" style="font-size:0.88rem">{{ p.data|replace('-','/')|truncate(10,true,'') }}{% if p.criado_em %} <span style="color:var(--muted);font-size:0.78rem">· {{ p.criado_em.strftime('%H:%M') }}</span>{% endif %}</div>
           <div class="hist-date">{{ p.diarias }} diária(s){% if p.obs %} · {{ p.obs }}{% endif %}</div>
         </div>
         <div style="display:flex;align-items:center;gap:0.75rem">
