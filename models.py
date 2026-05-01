@@ -1,7 +1,12 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import date, datetime
+from datetime import date, datetime, timezone, timedelta
 
 db = SQLAlchemy()
+
+_TZ_MANAUS = timezone(timedelta(hours=-4))
+
+def _now():
+    return datetime.now(tz=_TZ_MANAUS).replace(tzinfo=None)
 
 def contar_dias_uteis_sem_domingo(inicio, fim):
     """Conta dias entre duas datas excluindo domingos"""
@@ -29,7 +34,7 @@ class Cliente(db.Model):
     diarias_pagas   = db.Column(db.Integer, default=0)
     saldo_pendente  = db.Column(db.Float, default=0.0)
     ativo           = db.Column(db.Boolean, default=True)
-    criado_em       = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em       = db.Column(db.DateTime, default=_now)
     pagamentos      = db.relationship('Pagamento', backref='cliente', lazy=True, cascade='all, delete-orphan')
     contratos       = db.relationship('ContratoHistorico', backref='cliente', lazy=True, cascade='all, delete-orphan')
 
@@ -86,7 +91,7 @@ class Pagamento(db.Model):
     obs            = db.Column(db.String(300), default='')
     hash_arquivo   = db.Column(db.String(64), default='')   # SHA-256 do comprovante
     codigo_tx      = db.Column(db.String(100), default='')  # EndToEnd ID / TxID do PIX
-    criado_em      = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em      = db.Column(db.DateTime, default=_now)
 
 
 class ContratoHistorico(db.Model):
@@ -96,4 +101,4 @@ class ContratoHistorico(db.Model):
     data_fim     = db.Column(db.String(10))
     valor_diaria = db.Column(db.Float)
     total_pago   = db.Column(db.Float, default=0)
-    criado_em    = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em    = db.Column(db.DateTime, default=_now)
