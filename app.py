@@ -60,13 +60,20 @@ with app.app_context():
             conn.execute(db.text(
                 "ALTER TABLE pagamento "
                 "ADD COLUMN IF NOT EXISTS hash_arquivo VARCHAR(64) DEFAULT '', "
-                "ADD COLUMN IF NOT EXISTS codigo_tx VARCHAR(100) DEFAULT ''"
+                "ADD COLUMN IF NOT EXISTS codigo_tx VARCHAR(100) DEFAULT '' "
             ))
             conn.execute(db.text("ALTER TABLE cliente ALTER COLUMN foto_url TYPE TEXT"))
             conn.execute(db.text("ALTER TABLE cliente ALTER COLUMN arquivo_url TYPE TEXT"))
+            conn.execute(db.text("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS token_link VARCHAR(48)"))
+            # Gera token para clientes que ainda não têm
+            import secrets as _sec
+            rows = conn.execute(db.text("SELECT id FROM cliente WHERE token_link IS NULL OR token_link = ''")).fetchall()
+            for row in rows:
+                tk = _sec.token_urlsafe(32)
+                conn.execute(db.text("UPDATE cliente SET token_link = :tk WHERE id = :id"), {"tk": tk, "id": row[0]})
             conn.commit()
     except Exception as _e:
-        print(f"[MIGRATION] Aviso ao adicionar colunas (pode já existir): {_e}")
+        print(f"[MIGRATION] Aviso: {_e}")
 
 # ── Decorators ───────────────────────────────────────────────────
 
@@ -322,6 +329,25 @@ def renovar(id):
     db.session.commit()
     flash(f'Contrato de {c.nome} renovado!', 'success')
     return redirect(url_for('dashboard'))
+
+# ── Link público do cliente ─────────────────────────────────────
+
+@app.route('/c/<token>')
+def link_cliente(token):
+    c = Cliente.query.filter_by(token_link=token).first_or_404()
+    pags = [p for p in c.pagamentos if p.data >= (c.data_inicio or '')]
+    pags_ordenados = sorted(pags, key=lambda p: (p.data, p.criado_em or ''), reverse=True)
+    return render_template('link_cliente.html', c=c, pags=pags_ordenados)
+
+@app.route('/gerar_link/<int:id>', methods=['POST'])
+@login_required
+def gerar_link(id):
+    import secrets
+    c = Cliente.query.get_or_404(id)
+    c.token_link = secrets.token_urlsafe(32)
+    db.session.commit()
+    flash('Novo link gerado com sucesso!', 'success')
+    return redirect(url_for('editar', id=id))
 
 @app.route('/resumo')
 @login_required
