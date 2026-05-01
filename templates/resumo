@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Resumo Mensal{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>📊 Resumo Mensal</h1>
+      <p>Histórico de pagamentos por mês</p>
+    </div>
+  </div>
+
+  <!-- Seletor de mês -->
+  <div class="form-card" style="margin-bottom:1.5rem;padding:1rem 1.2rem">
+    <form method="get" action="/resumo" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+      <label style="font-family:var(--mono);font-size:0.78rem;color:var(--muted);white-space:nowrap">Selecionar mês:</label>
+      <select name="mes" onchange="this.form.submit()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:0.85rem;padding:0.4rem 0.7rem;border-radius:6px;cursor:pointer">
+        {% for m in meses %}
+        <option value="{{ m }}" {% if m == mes_sel %}selected{% endif %}>
+          {{ m }}
+        </option>
+        {% endfor %}
+      </select>
+      <span style="font-family:var(--mono);font-size:0.8rem;color:var(--muted);margin-left:auto">
+        Total recebido: <strong style="color:var(--accent)">R$ {{ "%.2f"|format(total_mes) }}</strong>
+      </span>
+    </form>
+  </div>
+
+  {% if por_cliente %}
+    {% for cliente_id, pags in por_cliente.items() %}
+      {% set c = clientes_map[cliente_id] %}
+      {% set total_cliente = pags | selectattr('valor', 'gt', 0) | map(attribute='valor') | sum %}
+      <div class="form-card" style="margin-bottom:1.2rem">
+        <!-- Cabeçalho do cliente -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;padding-bottom:0.7rem;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:0.75rem">
+            {% if c.foto_url %}
+            <img src="{{ c.foto_url }}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">
+            {% else %}
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:1rem">👤</div>
+            {% endif %}
+            <div>
+              <a href="/editar/{{ c.id }}" style="color:var(--text);text-decoration:none;font-weight:700;font-size:0.95rem">{{ c.nome }}</a>
+              <div style="font-family:var(--mono);font-size:0.72rem;color:var(--muted)">{{ c.whatsapp or '' }}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="color:var(--accent);font-weight:700;font-family:var(--mono)">R$ {{ "%.2f"|format(total_cliente) }}</div>
+            <div style="font-family:var(--mono);font-size:0.72rem;color:var(--muted)">{{ pags|length }} pagamento(s)</div>
+          </div>
+        </div>
+
+        <!-- Lista de pagamentos -->
+        <div class="hist-list" style="gap:0.5rem">
+          {% for p in pags | sort(attribute='criado_em') %}
+          <div class="hist-item" style="padding:0.55rem 0.7rem;{% if p.valor < 0 %}opacity:0.6{% endif %}">
+            <div>
+              <div style="font-family:var(--mono);font-size:0.85rem;color:var(--text)">
+                {{ p.data|replace('-','/')|truncate(10,true,'') }}
+                {% if p.criado_em %}
+                <span style="color:var(--muted);font-size:0.78rem"> · {{ p.criado_em.strftime('%H:%M') }}</span>
+                {% endif %}
+              </div>
+              <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted)">
+                {% if p.valor < 0 %}
+                  🔴 Estorno
+                {% else %}
+                  {{ p.diarias }} diária(s)
+                {% endif %}
+                {% if p.obs %} · {{ p.obs }}{% endif %}
+              </div>
+            </div>
+            <span style="font-family:var(--mono);font-weight:600;{% if p.valor < 0 %}color:var(--danger){% else %}color:var(--accent){% endif %}">
+              {% if p.valor < 0 %}−{% endif %}R$ {{ "%.2f"|format(p.valor|abs) }}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="form-card" style="text-align:center;padding:3rem 1rem">
+      <div style="font-size:2rem;margin-bottom:0.75rem">📭</div>
+      <p style="font-family:var(--mono);color:var(--muted);font-size:0.85rem">Nenhum pagamento registrado em {{ mes_sel }}.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
