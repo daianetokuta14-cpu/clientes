@@ -317,7 +317,74 @@ def renovar(id):
     flash(f'Contrato de {c.nome} renovado!', 'success')
     return redirect(url_for('dashboard'))
 
-# ── API para o Bot ───────────────────────────────────────────────
+@app.route('/resumo')
+@login_required
+@owner_required
+def resumo():
+    from collections import defaultdict
+    todos_pags = Pagamento.query.order_by(Pagamento.data.desc(), Pagamento.criado_em.desc()).all()
+    meses_disponiveis = sorted(set(p.data[:7] for p in todos_pags), reverse=True)
+
+    mes_sel    = request.args.get('mes', '')       # ex: "2026-04"
+    busca_nome = request.args.get('q', '').strip().lower()
+    busca_dia  = request.args.get('dia', '').strip()  # ex: "28/04/2026" ou "2026-04-28"
+
+    # Normaliza busca_dia para formato YYYY-MM-DD
+    dia_iso = ''
+    if busca_dia:
+        try:
+            if '/' in busca_dia:
+                parts = busca_dia.replace(' ', '').split('/')
+                if len(parts) == 3:
+                    d, m, a = parts
+                    dia_iso = f"{a}-{m.zfill(2)}-{d.zfill(2)}"
+            else:
+                dia_iso = busca_dia
+        except Exception:
+            dia_iso = ''
+
+    # Se tem busca por nome ou dia → mostra TODOS os meses (histórico geral)
+    modo_geral = bool(busca_nome or dia_iso)
+
+    if not mes_sel and not modo_geral:
+        mes_sel = meses_disponiveis[0] if meses_disponiveis else this_month()
+
+    # Filtra pagamentos
+    pags_filtrados = todos_pags
+    if not modo_geral and mes_sel:
+        pags_filtrados = [p for p in pags_filtrados if p.data.startswith(mes_sel)]
+    if dia_iso:
+        pags_filtrados = [p for p in pags_filtrados if p.data == dia_iso]
+
+    # Monta mapa de clientes
+    todos_clientes = Cliente.query.all()
+    clientes_map   = {c.id: c for c in todos_clientes}
+
+    # Filtra por nome (sobre clientes)
+    if busca_nome:
+        ids_match = {c.id for c in todos_clientes if busca_nome in c.nome.lower()}
+        pags_filtrados = [p for p in pags_filtrados if p.cliente_id in ids_match]
+
+    # Agrupa por cliente
+    por_cliente = defaultdict(list)
+    for p in pags_filtrados:
+        por_cliente[p.cliente_id].append(p)
+
+    total_filtrado = sum(p.valor for p in pags_filtrados if p.valor > 0)
+
+    return render_template('resumo.html',
+        meses        = meses_disponiveis,
+        mes_sel      = mes_sel,
+        por_cliente  = por_cliente,
+        clientes_map = clientes_map,
+        total_mes    = total_filtrado,
+        busca_nome   = busca_nome,
+        busca_dia    = busca_dia,
+        modo_geral   = modo_geral,
+        role         = session['role']
+    )
+
+
 
 @app.route('/api/inadimplentes')
 @api_key_required
