@@ -56,7 +56,11 @@ class Cliente(db.Model):
     def dias_desde_inicio(self):
         try:
             inicio = date.fromisoformat(self.data_inicio)
-            return contar_dias_uteis_sem_domingo(inicio, date.today())
+            # A primeira parcela só vence no dia SEGUINTE ao cadastro.
+            # Ex: cliente entra dia 1 → primeira cobrança é dia 2.
+            # Por isso somamos 1 dia ao início antes de contar.
+            inicio_cobranca = date.fromordinal(inicio.toordinal() + 1)
+            return contar_dias_uteis_sem_domingo(inicio_cobranca, date.today())
         except:
             return 0
 
