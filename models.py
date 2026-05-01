@@ -18,6 +18,8 @@ def contar_dias_uteis_sem_domingo(inicio, fim):
         atual = date.fromordinal(atual.toordinal() + 1)
     return total
 
+import secrets
+
 class Cliente(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
     nome            = db.Column(db.String(100), nullable=False)
@@ -34,6 +36,7 @@ class Cliente(db.Model):
     diarias_pagas   = db.Column(db.Integer, default=0)
     saldo_pendente  = db.Column(db.Float, default=0.0)
     ativo           = db.Column(db.Boolean, default=True)
+    token_link      = db.Column(db.String(48), unique=True, default=lambda: secrets.token_urlsafe(32))
     criado_em       = db.Column(db.DateTime, default=_now)
     pagamentos      = db.relationship('Pagamento', backref='cliente', lazy=True, cascade='all, delete-orphan')
     contratos       = db.relationship('ContratoHistorico', backref='cliente', lazy=True, cascade='all, delete-orphan')
