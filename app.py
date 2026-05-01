@@ -98,11 +98,15 @@ def api_key_required(f):
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+def _now_manaus():
+    from datetime import timezone, timedelta
+    return datetime.now(tz=timezone(timedelta(hours=-4)))
+
 def today():
-    return date.today().isoformat()
+    return _now_manaus().date().isoformat()
 
 def this_month():
-    return date.today().strftime('%Y-%m')
+    return _now_manaus().strftime('%Y-%m')
 
 def salvar_arquivo(file):
     if file and file.filename:
