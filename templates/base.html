@@ -100,9 +100,6 @@ h2{font-size:1.1rem;font-weight:700;margin-bottom:0.75rem}
   <a href="/dashboard" class="nav-brand">Mega<span> Credito</span></a>
   <div class="nav-right">
     <span class="role-badge {{ session.role }}">{{ session.role }}</span>
-    {% if session.role == 'owner' %}
-    <a href="/resumo" style="font-size:0.75rem">📊 Resumo</a>
-    {% endif %}
     <a href="/logout" style="color:var(--danger);font-size:0.75rem">Sair</a>
   </div>
 </nav>
@@ -130,6 +127,9 @@ h2{font-size:1.1rem;font-weight:700;margin-bottom:0.75rem}
   </a>
   <a href="/cadastrar" class="{% if request.path == '/cadastrar' %}active{% endif %}">
     <span class="icon">➕</span>Novo
+  </a>
+  <a href="/resumo" class="{% if request.path == '/resumo' %}active{% endif %}">
+    <span class="icon">📊</span>Resumo
   </a>
 </nav>
 {% endif %}
