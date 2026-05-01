@@ -369,18 +369,25 @@ def resumo():
     for p in pags_filtrados:
         por_cliente[p.cliente_id].append(p)
 
-    total_filtrado = sum(p.valor for p in pags_filtrados if p.valor > 0)
+    # Calcula total positivo por cliente no Python
+    total_por_cliente = {
+        cid: round(sum(p.valor for p in pags if p.valor > 0), 2)
+        for cid, pags in por_cliente.items()
+    }
+
+    total_filtrado = round(sum(p.valor for p in pags_filtrados if p.valor > 0), 2)
 
     return render_template('resumo.html',
-        meses        = meses_disponiveis,
-        mes_sel      = mes_sel,
-        por_cliente  = por_cliente,
-        clientes_map = clientes_map,
-        total_mes    = total_filtrado,
-        busca_nome   = busca_nome,
-        busca_dia    = busca_dia,
-        modo_geral   = modo_geral,
-        role         = session['role']
+        meses             = meses_disponiveis,
+        mes_sel           = mes_sel,
+        por_cliente       = por_cliente,
+        clientes_map      = clientes_map,
+        total_mes         = total_filtrado,
+        total_por_cliente = total_por_cliente,
+        busca_nome        = busca_nome,
+        busca_dia         = busca_dia,
+        modo_geral        = modo_geral,
+        role              = session['role']
     )
 
 
