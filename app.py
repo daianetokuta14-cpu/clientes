@@ -62,6 +62,8 @@ with app.app_context():
                 "ADD COLUMN IF NOT EXISTS hash_arquivo VARCHAR(64) DEFAULT '', "
                 "ADD COLUMN IF NOT EXISTS codigo_tx VARCHAR(100) DEFAULT ''"
             ))
+            conn.execute(db.text("ALTER TABLE cliente ALTER COLUMN foto_url TYPE TEXT"))
+            conn.execute(db.text("ALTER TABLE cliente ALTER COLUMN arquivo_url TYPE TEXT"))
             conn.commit()
     except Exception as _e:
         print(f"[MIGRATION] Aviso ao adicionar colunas (pode já existir): {_e}")
