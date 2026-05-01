@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MegaCrédito — {{ c.nome }}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0f;--surface:#16161a;--border:#2a2a35;
+  --text:#e8e8f0;--muted:#6b6b80;--accent:#39ff6a;--danger:#ff4d6d;
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding:0 0 40px}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:1rem 1.2rem;display:flex;align-items:center;gap:0.75rem}
+.brand{font-size:1.1rem;font-weight:800;color:var(--accent)}
+.brand span{color:var(--text)}
+.container{max-width:520px;margin:0 auto;padding:1.5rem 1rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.2rem;margin-bottom:1.2rem}
+.avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border)}
+.avatar-placeholder{width:64px;height:64px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:1.8rem}
+.nome{font-size:1.2rem;font-weight:800;margin-top:0.75rem}
+.label{font-family:var(--mono);font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem;margin-top:0.9rem}
+.valor{font-family:var(--mono);font-size:0.92rem;color:var(--text)}
+.prog-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:0.5rem}
+.prog-fill{height:100%;background:var(--accent);border-radius:4px;transition:width 0.4s}
+.prog-label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:0.75rem;color:var(--muted);margin-top:0.3rem}
+.badge{display:inline-block;font-family:var(--mono);font-size:0.7rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:20px;letter-spacing:0.05em}
+.badge-ok{background:rgba(57,255,106,0.12);color:var(--accent);border:1px solid rgba(57,255,106,0.3)}
+.badge-atraso{background:rgba(255,77,109,0.12);color:var(--danger);border:1px solid rgba(255,77,109,0.3)}
+.badge-aguard{background:rgba(255,200,0,0.12);color:#ffc800;border:1px solid rgba(255,200,0,0.3)}
+.pag-row{display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.pag-row:last-child{border-bottom:none}
+.pag-data{font-family:var(--mono);font-size:0.82rem}
+.pag-hora{font-family:var(--mono);font-size:0.72rem;color:var(--muted)}
+.pag-det{font-family:var(--mono);font-size:0.72rem;color:var(--muted)}
+.pag-val{font-family:var(--mono);font-weight:600;font-size:0.88rem;color:var(--accent)}
+.pag-val.neg{color:var(--danger)}
+.empty{text-align:center;padding:2rem 1rem;font-family:var(--mono);font-size:0.82rem;color:var(--muted)}
+.footer{text-align:center;font-family:var(--mono);font-size:0.7rem;color:var(--muted);margin-top:2rem}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Mega<span>Crédito</span></div>
+</header>
+
+<div class="container">
+
+  <!-- Perfil -->
+  <div class="card" style="text-align:center">
+    {% if c.foto_url %}
+    <img src="{{ c.foto_url }}" class="avatar">
+    {% else %}
+    <div class="avatar-placeholder" style="margin:0 auto">👤</div>
+    {% endif %}
+    <div class="nome">{{ c.nome }}</div>
+    <div style="margin-top:0.5rem">
+      {% if c.dias_em_atraso > 0 %}
+      <span class="badge badge-atraso">⚠️ {{ c.dias_em_atraso }} dia(s) em atraso</span>
+      {% elif c.diarias_pagas >= 20 %}
+      <span class="badge badge-aguard">🎉 Aguardando renovação</span>
+      {% else %}
+      <span class="badge badge-ok">✓ Em dia</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Progresso do contrato -->
+  <div class="card">
+    <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem">Contrato Atual</div>
+    <div class="prog-bar">
+      <div class="prog-fill" style="width:{{ c.pct }}%"></div>
+    </div>
+    <div class="prog-label">
+      <span>{{ c.diarias_pagas }}/20 diárias</span>
+      <span>{{ c.pct }}%</span>
+    </div>
+
+    <div class="label">Início do contrato</div>
+    <div class="valor">{{ (c.data_inicio or '')|replace('-','/') }}</div>
+
+    <div class="label">Valor por diária</div>
+    <div class="valor">R$ {{ "%.2f"|format(c.valor_diaria) }}</div>
+
+    <div class="label">Total pago neste contrato</div>
+    <div class="valor" style="color:var(--accent);font-weight:700">R$ {{ "%.2f"|format(c.total_pago) }}</div>
+
+    {% if c.dias_em_atraso > 0 %}
+    <div class="label">Valor em atraso</div>
+    <div class="valor" style="color:var(--danger);font-weight:700">R$ {{ "%.2f"|format(c.valor_em_atraso) }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Pagamentos -->
+  <div class="card">
+    <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem">
+      Pagamentos do Contrato
+      <span style="color:var(--accent);margin-left:0.5rem">{{ pags|length }}</span>
+    </div>
+
+    {% if pags %}
+      {% for p in pags %}
+      <div class="pag-row">
+        <div>
+          <div class="pag-data">
+            {{ p.data|replace('-','/')|truncate(10,true,'') }}
+            {% if p.criado_em %}<span class="pag-hora">· {{ p.criado_em.strftime('%H:%M') }}</span>{% endif %}
+          </div>
+          <div class="pag-det">
+            {% if p.valor < 0 %}Estorno{% else %}{{ p.diarias }} diária(s){% endif %}
+            {% if p.obs and p.obs not in ['Pago via bot WhatsApp', '[ESTORNO]'] %} · {{ p.obs }}{% endif %}
+          </div>
+        </div>
+        <span class="pag-val {% if p.valor < 0 %}neg{% endif %}">
+          {% if p.valor < 0 %}−{% endif %}R$ {{ "%.2f"|format(p.valor|abs) }}
+        </span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Nenhum pagamento registrado ainda.</div>
+    {% endif %}
+  </div>
+
+  <div class="footer">MegaCrédito · Consulta de contrato<br>Esta página é exclusiva para você.</div>
+</div>
+
+</body>
+</html>
