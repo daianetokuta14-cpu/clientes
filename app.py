@@ -319,7 +319,6 @@ def renovar(id):
 
 @app.route('/resumo')
 @login_required
-@owner_required
 def resumo():
     from collections import defaultdict
     todos_pags = Pagamento.query.order_by(Pagamento.data.desc(), Pagamento.criado_em.desc()).all()
