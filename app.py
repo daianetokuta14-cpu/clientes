@@ -82,6 +82,12 @@ with app.app_context():
     except Exception as _e:
         print(f"[MIGRATION] token_link seed — {_e}")
 
+# ── Health check ─────────────────────────────────────────────────
+
+@app.route('/healthz')
+def healthz():
+    return 'ok', 200
+
 # ── Decorators ───────────────────────────────────────────────────
 
 def login_required(f):
