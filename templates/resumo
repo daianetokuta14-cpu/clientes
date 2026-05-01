@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Resumo Mensal{% endblock %}
+{% block title %}Resumo{% endblock %}
 {% block content %}
 <style>
 .mes-tabs{display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1.2rem}
@@ -96,8 +96,6 @@
   {% if por_cliente %}
     {% for cliente_id, pags in por_cliente.items() %}
       {% set c = clientes_map[cliente_id] %}
-      {% set total_c = namespace(val=0) %}
-      {% for p in pags %}{% if p.valor > 0 %}{% set total_c.val = total_c.val + p.valor %}{% endif %}{% endfor %}
       <div class="cliente-card">
         <div class="cliente-header">
           <div style="display:flex;align-items:center;gap:0.7rem">
@@ -112,7 +110,7 @@
             </div>
           </div>
           <div style="text-align:right">
-            <div style="color:var(--accent);font-weight:700;font-family:var(--mono);font-size:0.9rem">R$ {{ "%.2f"|format(total_c.val) }}</div>
+            <div style="color:var(--accent);font-weight:700;font-family:var(--mono);font-size:0.9rem">R$ {{ "%.2f"|format(total_por_cliente[cliente_id]) }}</div>
             <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted)">{{ c.diarias_pagas }}/20 diárias</div>
           </div>
         </div>
@@ -137,7 +135,7 @@
 
         <div class="total-bar">
           <span style="color:var(--muted)">Total recebido neste filtro</span>
-          <span style="color:var(--accent);font-weight:600">R$ {{ "%.2f"|format(total_c.val) }}</span>
+          <span style="color:var(--accent);font-weight:600">R$ {{ "%.2f"|format(total_por_cliente[cliente_id]) }}</span>
         </div>
       </div>
     {% endfor %}
@@ -158,7 +156,6 @@ document.getElementById('inputNome').addEventListener('keydown',function(e){
 document.getElementById('inputDia').addEventListener('keydown',function(e){
   if(e.key==='Enter'){e.preventDefault();document.getElementById('formDia').submit();}
 });
-// Máscara automática DD/MM/AAAA no campo dia
 document.getElementById('inputDia').addEventListener('input',function(){
   let v=this.value.replace(/\D/g,'');
   if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2);
