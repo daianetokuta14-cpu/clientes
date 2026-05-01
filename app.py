@@ -55,25 +55,32 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
     # Migration manual: adiciona colunas novas sem derrubar o banco existente
+    import secrets as _sec
+
+    def _run(sql, params=None):
+        try:
+            with db.engine.connect() as _c:
+                _c.execute(db.text(sql), params or {})
+                _c.commit()
+        except Exception as _e:
+            print(f"[MIGRATION] {sql[:60]} — {_e}")
+
+    _run("ALTER TABLE pagamento ADD COLUMN IF NOT EXISTS hash_arquivo VARCHAR(64) DEFAULT ''")
+    _run("ALTER TABLE pagamento ADD COLUMN IF NOT EXISTS codigo_tx VARCHAR(100) DEFAULT ''")
+    _run("ALTER TABLE cliente ALTER COLUMN foto_url TYPE TEXT")
+    _run("ALTER TABLE cliente ALTER COLUMN arquivo_url TYPE TEXT")
+    _run("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS token_link VARCHAR(48)")
+
+    # Gera token para clientes sem token
     try:
-        with db.engine.connect() as conn:
-            conn.execute(db.text(
-                "ALTER TABLE pagamento "
-                "ADD COLUMN IF NOT EXISTS hash_arquivo VARCHAR(64) DEFAULT '', "
-                "ADD COLUMN IF NOT EXISTS codigo_tx VARCHAR(100) DEFAULT '' "
-            ))
-            conn.execute(db.text("ALTER TABLE cliente ALTER COLUMN foto_url TYPE TEXT"))
-            conn.execute(db.text("ALTER TABLE cliente ALTER COLUMN arquivo_url TYPE TEXT"))
-            conn.execute(db.text("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS token_link VARCHAR(48)"))
-            # Gera token para clientes que ainda não têm
-            import secrets as _sec
-            rows = conn.execute(db.text("SELECT id FROM cliente WHERE token_link IS NULL OR token_link = ''")).fetchall()
+        with db.engine.connect() as _c:
+            rows = _c.execute(db.text("SELECT id FROM cliente WHERE token_link IS NULL OR token_link = ''")).fetchall()
             for row in rows:
-                tk = _sec.token_urlsafe(32)
-                conn.execute(db.text("UPDATE cliente SET token_link = :tk WHERE id = :id"), {"tk": tk, "id": row[0]})
-            conn.commit()
+                _c.execute(db.text("UPDATE cliente SET token_link = :tk WHERE id = :id"),
+                           {"tk": _sec.token_urlsafe(32), "id": row[0]})
+            _c.commit()
     except Exception as _e:
-        print(f"[MIGRATION] Aviso: {_e}")
+        print(f"[MIGRATION] token_link seed — {_e}")
 
 # ── Decorators ───────────────────────────────────────────────────
 
