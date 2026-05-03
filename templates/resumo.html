@@ -148,8 +148,7 @@
         <div class="tx-info">
           <div class="tx-nome">{{ c.nome }}</div>
           <div class="tx-sub">
-            {% if p.criado_em %}{{ p.criado_em.strftime('%H:%M') }}{% else %}—{% endif %}
-            · Pix
+            {% if p.criado_em %}{{ p.criado_em.strftime("%H:%M") }}{% else %}—{% endif %}{% if p.obs %} · {{ p.obs }}{% endif %}
           </div>
         </div>
         <div class="tx-val" style="color:{% if entrada %}var(--accent){% else %}var(--danger){% endif %}">
