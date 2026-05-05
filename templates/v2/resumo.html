@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Resumo — Sistema Avançado{% endblock %}
+{% block content %}
+<div class="container has-bottom-nav">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Resumo</h1>
+      <p>Total do período: <strong style="color:var(--accent)">R$ {{ '%.2f'|format(total_mes) }}</strong></p>
+    </div>
+  </div>
+
+  <!-- Seletor de mês -->
+  <div class="tabs" style="flex-wrap:wrap">
+    {% for m in meses %}
+    <a href="/v2/resumo?mes={{ m }}" class="tab-btn {{ 'active' if m == mes_sel }}">{{ m }}</a>
+    {% endfor %}
+  </div>
+
+  {% if pags_lista %}
+  <div class="hist-list" style="margin-top:1rem">
+  {% for p in pags_lista %}
+    {% set c = clientes_map.get(p.cliente_id) %}
+    <div class="hist-item">
+      <div>
+        <div style="font-size:0.88rem;font-weight:600">{{ c.nome if c else '—' }}</div>
+        <div class="hist-date">
+          {{ p.data }}
+          {% if c %}
+          · <span style="color:var(--accent2)">{{ '📅 Diária' if c.tipo_cobranca == 'diaria' else '📆 Mensalidade' }}</span>
+          {% endif %}
+        </div>
+        {% if p.obs %}<div style="font-size:0.72rem;color:var(--muted)">{{ p.obs }}</div>{% endif %}
+      </div>
+      <div class="hist-val">R$ {{ '%.2f'|format(p.valor) }}</div>
+    </div>
+  {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:var(--muted)">
+    <div style="font-size:2rem;margin-bottom:0.5rem">📊</div>
+    <p>Nenhum pagamento neste período.</p>
+  </div>
+  {% endif %}
+</div>
+
+<nav class="bottom-nav">
+  <a href="/v2/dashboard"><span class="icon">🏠</span>Início</a>
+  <a href="/v2/clientes"><span class="icon">👥</span>Clientes</a>
+  <a href="/v2/cadastrar"><span class="icon">➕</span>Novo</a>
+  <a href="/v2/resumo" class="active"><span class="icon">📊</span>Resumo</a>
+  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
+</nav>
+{% endblock %}
