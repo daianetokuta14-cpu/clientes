@@ -1,74 +1,168 @@
 {% extends "base.html" %}
-{% block title %}Novo Cliente — Mega Credito{% endblock %}
+{% block title %}Novo Cliente — Sistema Avançado{% endblock %}
+{% block extra_css %}
+<style>
+.tipo-btns{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.25rem}
+.tipo-btn{padding:1.1rem;border:2px solid var(--border);border-radius:10px;background:var(--surface2);
+  cursor:pointer;font-family:var(--sans);font-size:0.85rem;font-weight:700;color:var(--muted);
+  text-align:center;transition:all 0.2s}
+.tipo-btn .t-icon{font-size:1.5rem;display:block;margin-bottom:0.3rem}
+.tipo-btn:hover,.tipo-btn.selected{border-color:var(--accent);color:var(--accent);background:rgba(127,255,110,0.07)}
+.secao-diaria,.secao-mensalidade{display:none}
+.secao-diaria.show,.secao-mensalidade.show{display:block}
+</style>
+{% endblock %}
 {% block content %}
 <div class="container has-bottom-nav">
   <div class="page-header">
-    <div class="page-header-left"><h1>Novo Cliente</h1><p>Cadastrar contrato de 20 diárias</p></div>
+    <div class="page-header-left">
+      <h1>Novo Cliente</h1>
+      <p>Sistema avançado — Diária ou Mensalidade</p>
+    </div>
   </div>
-  <div class="form-card">
-    <form method="post" action="/cadastrar" enctype="multipart/form-data">
 
-      <div class="divider-label">Foto do Cliente</div>
-      <div class="foto-container" onclick="document.getElementById('fotoInput').click()">
-        <img id="fotoPreview" src="/static/default_avatar.png" class="foto-preview" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><circle cx=%2240%22 cy=%2230%22 r=%2218%22 fill=%22%236b6b80%22/><ellipse cx=%2240%22 cy=%2270%22 rx=%2228%22 ry=%2220%22 fill=%22%236b6b80%22/></svg>'">
-        <div style="font-family:var(--mono);font-size:0.72rem;color:var(--muted)">📷 Toque para adicionar foto</div>
-        <input type="file" id="fotoInput" name="foto" accept="image/*" capture="environment" onchange="previewFoto(this)">
+  <form method="post" action="/v2/cadastrar" enctype="multipart/form-data">
+    <input type="hidden" name="tipo_cobranca" id="tipoCobrancaInput" value="">
+
+    <div class="form-card">
+      <div class="divider-label">Tipo de cobrança</div>
+      <div class="tipo-btns">
+        <div class="tipo-btn" id="btnTipoDiaria" onclick="selectTipo('diaria')">
+          <span class="t-icon">📅</span>
+          Diária
+          <div style="font-size:0.7rem;color:var(--muted);font-weight:400;margin-top:0.2rem">Cobra por dia útil</div>
+        </div>
+        <div class="tipo-btn" id="btnTipoMens" onclick="selectTipo('mensalidade')">
+          <span class="t-icon">📆</span>
+          Mensalidade
+          <div style="font-size:0.7rem;color:var(--muted);font-weight:400;margin-top:0.2rem">Cobra todo mês</div>
+        </div>
       </div>
 
-      <div class="divider-label">Dados Pessoais</div>
-      <div class="form-group"><label>Nome Completo *</label><input type="text" name="nome" required placeholder="Ex: João Silva"></div>
-      <div class="form-group"><label>WhatsApp</label><input type="tel" name="whatsapp" placeholder="(00) 00000-0000"></div>
-      <div class="form-row">
-        <div class="form-group"><label>CPF</label><input type="text" name="cpf" placeholder="000.000.000-00" maxlength="14"></div>
-        <div class="form-group"><label>Limite (R$)</label><input type="number" name="limite" step="0.01" min="0" placeholder="0,00" value="0"></div>
+      <!-- Campos da Diária -->
+      <div class="secao-diaria" id="secaoDiaria">
+        <div class="divider-label">Configuração da Diária</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Valor da diária (R$)</label>
+            <input type="number" name="valor_diaria" step="0.01" min="0.01" placeholder="Ex: 50.00">
+          </div>
+          <div class="form-group">
+            <label>Total de diárias</label>
+            <input type="number" name="total_diarias" min="1" max="999" value="20" placeholder="Ex: 20">
+          </div>
+        </div>
       </div>
-      <div class="form-group"><label>Endereço</label><input type="text" name="endereco" placeholder="Rua, número, bairro, cidade"></div>
-      <div class="form-group"><label>Email</label><input type="email" name="email" placeholder="email@exemplo.com"></div>
-      <div class="form-group"><label>Chave Pix</label><input type="text" name="chave_pix" placeholder="CPF, email, telefone ou chave aleatória"></div>
 
-      <div class="divider-label">Arquivo / Documento</div>
+      <!-- Campos da Mensalidade -->
+      <div class="secao-mensalidade" id="secaoMensalidade">
+        <div class="divider-label">Configuração da Mensalidade</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Valor da mensalidade (R$)</label>
+            <input type="number" name="valor_mensalidade" step="0.01" min="0.01" placeholder="Ex: 500.00">
+          </div>
+          <div class="form-group">
+            <label>Dia de vencimento</label>
+            <input type="number" name="dia_vencimento" min="1" max="28" value="30" placeholder="Ex: 30">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Cobrança recorrente</label>
+          <select name="cobranca_recorrente">
+            <option value="sim">Sim — cobra todo mês automaticamente</option>
+            <option value="nao">Não — gerencio manualmente</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Juros por atraso (ambos) -->
+      <div class="form-group" id="grupoJuros" style="display:none">
+        <div class="divider-label">Juros por atraso</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>% de juros ao dia (0 = sem juros)</label>
+            <input type="number" name="juros_atraso" step="0.01" min="0" max="100" value="0" placeholder="Ex: 1.0">
+          </div>
+          <div class="form-group">
+            <label>Data de início</label>
+            <input type="date" name="data_inicio" value="{{ hoje }}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dados pessoais -->
+    <div class="form-card" id="dadosPessoais" style="display:none;margin-top:0.75rem">
+      <div class="divider-label">Dados pessoais</div>
       <div class="form-group">
-        <label>Arquivo (foto ou PDF)</label>
-        <input type="file" name="arquivo" accept="image/*,.pdf">
-        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);margin-top:0.4rem">Contrato, RG, etc.</div>
+        <label>Nome completo *</label>
+        <input type="text" name="nome" placeholder="Nome do cliente" required>
       </div>
-
-      <div class="divider-label">Contrato</div>
       <div class="form-row">
-        <div class="form-group"><label>Valor da diária (R$) *</label><input type="number" name="valor_diaria" step="0.01" min="0.01" required placeholder="0,00"></div>
-        <div class="form-group"><label>Data de início</label><input type="date" name="data_inicio" value="{{ hoje }}"></div>
+        <div class="form-group">
+          <label>WhatsApp (com DDD)</label>
+          <input type="text" name="whatsapp" placeholder="Ex: 92999998888">
+        </div>
+        <div class="form-group">
+          <label>CPF</label>
+          <input type="text" name="cpf" placeholder="000.000.000-00">
+        </div>
       </div>
-      <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);margin-bottom:1.25rem">Total fixo: 20 diárias. Domingos não contam como atraso.</div>
+      <div class="form-group">
+        <label>Endereço</label>
+        <input type="text" name="endereco" placeholder="Rua, número, bairro">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" name="email" placeholder="email@exemplo.com">
+        </div>
+        <div class="form-group">
+          <label>Chave PIX</label>
+          <input type="text" name="chave_pix" placeholder="CPF, telefone ou e-mail">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações do contrato</label>
+        <input type="text" name="obs_contrato" placeholder="Ex: garantia, referência...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Foto do cliente</label>
+          <input type="file" name="foto" accept="image/*" style="min-height:44px;padding:0.5rem">
+        </div>
+        <div class="form-group">
+          <label>Documento (PDF/foto)</label>
+          <input type="file" name="arquivo" accept="image/*,application/pdf" style="min-height:44px;padding:0.5rem">
+        </div>
+      </div>
 
-      <div style="display:flex;flex-direction:column;gap:0.6rem">
-        <button type="submit" class="btn btn-primary btn-full">Cadastrar Cliente</button>
-        <a href="/dashboard" class="btn btn-secondary btn-full">Cancelar</a>
+      <div style="display:flex;gap:0.6rem;margin-top:0.5rem">
+        <a href="/v2/dashboard" class="btn btn-secondary" style="flex:1;text-align:center">Cancelar</a>
+        <button type="submit" class="btn btn-primary" style="flex:2">Cadastrar cliente</button>
       </div>
-    </form>
-  </div>
+    </div>
+  </form>
 </div>
+
+<nav class="bottom-nav">
+  <a href="/v2/dashboard"><span class="icon">🏠</span>Início</a>
+  <a href="/v2/clientes"><span class="icon">👥</span>Clientes</a>
+  <a href="/v2/cadastrar" class="active"><span class="icon">➕</span>Novo</a>
+  <a href="/v2/resumo"><span class="icon">📊</span>Resumo</a>
+  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
+</nav>
+
 <script>
-function previewFoto(input) {
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = e => document.getElementById('fotoPreview').src = e.target.result;
-    reader.readAsDataURL(input.files[0]);
-  }
+function selectTipo(t) {
+  document.getElementById('tipoCobrancaInput').value = t;
+  document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById(t === 'diaria' ? 'btnTipoDiaria' : 'btnTipoMens').classList.add('selected');
+  document.getElementById('secaoDiaria').className    = 'secao-diaria'    + (t === 'diaria'      ? ' show' : '');
+  document.getElementById('secaoMensalidade').className = 'secao-mensalidade' + (t === 'mensalidade' ? ' show' : '');
+  document.getElementById('grupoJuros').style.display   = 'block';
+  document.getElementById('dadosPessoais').style.display = 'block';
 }
-// Máscara CPF
-document.querySelector('[name="cpf"]').addEventListener('input', function() {
-  let v = this.value.replace(/\D/g,'');
-  v = v.replace(/(\d{3})(\d)/,'$1.$2');
-  v = v.replace(/(\d{3})(\d)/,'$1.$2');
-  v = v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');
-  this.value = v;
-});
-// Máscara WhatsApp
-document.querySelector('[name="whatsapp"]').addEventListener('input', function() {
-  let v = this.value.replace(/\D/g,'');
-  v = v.replace(/^(\d{2})(\d)/,'($1) $2');
-  v = v.replace(/(\d{5})(\d)/,'$1-$2');
-  this.value = v;
-});
 </script>
 {% endblock %}
