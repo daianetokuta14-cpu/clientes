@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Sistema Avançado{% endblock %}
+{% block content %}
+<div class="container has-bottom-nav">
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>📊 Sistema Avançado</h1>
+      <p>Diárias e mensalidades • {{ hoje }}</p>
+    </div>
+    <a href="/v2/cadastrar" class="btn btn-primary">+ Novo cliente</a>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="stat-card">
+      <div class="stat-label">Hoje</div>
+      <div class="stat-value green">R$ {{ '%.2f'|format(total_hoje) }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Mês</div>
+      <div class="stat-value blue">R$ {{ '%.2f'|format(total_mes) }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Em atraso</div>
+      <div class="stat-value {{ 'warn' if em_atraso > 0 else '' }}">{{ em_atraso }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Clientes</div>
+      <div class="stat-value">{{ clientes|length }}</div>
+    </div>
+  </div>
+
+  <!-- Tabs tipo -->
+  <div class="tabs">
+    <a href="/v2/clientes" class="tab-btn">Todos</a>
+    <a href="/v2/clientes?tipo=diaria" class="tab-btn">📅 Diárias ({{ diarias }})</a>
+    <a href="/v2/clientes?tipo=mensalidade" class="tab-btn">📆 Mensalidades ({{ mensalidades }})</a>
+    <a href="/v2/clientes?f=atraso" class="tab-btn" style="{% if em_atraso > 0 %}color:var(--warn);border-color:var(--warn){% endif %}">⚠️ Atraso ({{ em_atraso }})</a>
+  </div>
+
+  <!-- Lista de clientes em atraso (destaque) -->
+  {% set atrasados = clientes|selectattr('dias_em_atraso','gt',0)|list %}
+  {% if atrasados %}
+  <div style="margin-bottom:1rem">
+    <div class="divider-label">⚠️ Em atraso</div>
+    <div class="client-cards">
+    {% for c in atrasados %}
+      <div class="client-card atraso">
+        <div class="client-card-header">
+          <div>
+            <div class="client-card-name">{{ c.nome }}</div>
+            <span class="badge" style="background:rgba(255,184,110,0.12);color:var(--warn);font-size:0.6rem">
+              {{ '📅' if c.tipo_cobranca == 'diaria' else '📆' }} {{ c.tipo_cobranca }}
+            </span>
+          </div>
+          <span class="badge badge-ativo" style="background:rgba(255,110,110,0.1);color:var(--danger)">
+            {{ c.dias_em_atraso }}d atraso
+          </span>
+        </div>
+        <div class="client-card-body">
+          <div>
+            <div class="client-card-label">Atraso</div>
+            <div class="mono" style="color:var(--danger)">R$ {{ '%.2f'|format(c.valor_em_atraso) }}</div>
+          </div>
+          <div>
+            <div class="client-card-label">
+              {% if c.tipo_cobranca == 'diaria' %}Diárias{% else %}Mensalidade{% endif %}
+            </div>
+            <div class="mono">
+              {% if c.tipo_cobranca == 'diaria' %}{{ c.diarias_pagas }}/{{ c.total_diarias }}
+              {% else %}R$ {{ '%.2f'|format(c.valor_mensalidade) }}/mês{% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="client-card-actions">
+          <a href="/v2/editar/{{ c.id }}" class="btn btn-secondary btn-sm">Ver</a>
+          <form method="post" action="/v2/pagar/{{ c.id }}" style="display:flex;gap:0.4rem;flex:1">
+            <input type="number" name="valor" step="0.01" min="0.01"
+              placeholder="R$ valor" style="min-height:36px;font-size:0.82rem;flex:1"
+              value="{{ '%.2f'|format(c.valor_em_atraso) }}">
+            <button class="btn btn-success btn-sm" type="submit">✓ Pagar</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Todos os outros clientes -->
+  {% set ok_clientes = clientes|rejectattr('dias_em_atraso','gt',0)|list %}
+  {% if ok_clientes %}
+  <div class="divider-label">✅ Em dia</div>
+  <div class="client-cards">
+  {% for c in ok_clientes %}
+    <div class="client-card">
+      <div class="client-card-header">
+        <div>
+          <div class="client-card-name">{{ c.nome }}</div>
+          <span class="badge" style="background:rgba(110,159,255,0.1);color:var(--accent2);font-size:0.6rem">
+            {{ '📅' if c.tipo_cobranca == 'diaria' else '📆' }} {{ c.tipo_cobranca }}
+          </span>
+        </div>
+        <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
+      </div>
+      <div class="client-card-body">
+        {% if c.tipo_cobranca == 'diaria' %}
+        <div>
+          <div class="client-card-label">Progresso</div>
+          <div class="mono">{{ c.diarias_pagas }}/{{ c.total_diarias }}</div>
+        </div>
+        <div>
+          <div class="client-card-label">Diária</div>
+          <div class="mono green">R$ {{ '%.2f'|format(c.valor_diaria) }}</div>
+        </div>
+        {% else %}
+        <div>
+          <div class="client-card-label">Mensalidade</div>
+          <div class="mono green">R$ {{ '%.2f'|format(c.valor_mensalidade) }}</div>
+        </div>
+        <div>
+          <div class="client-card-label">Vencimento</div>
+          <div class="mono">Dia {{ c.dia_vencimento }}</div>
+        </div>
+        {% endif %}
+      </div>
+      {% if c.tipo_cobranca == 'diaria' %}
+      <div class="progress-row">
+        <div class="progress-bar">
+          <div class="progress-fill {{ 'full' if c.pct == 100 else '' }}" style="width:{{ c.pct }}%"></div>
+        </div>
+        <span class="mono" style="font-size:0.7rem;color:var(--muted)">{{ c.pct }}%</span>
+      </div>
+      {% endif %}
+      <div class="client-card-actions">
+        <a href="/v2/editar/{{ c.id }}" class="btn btn-secondary btn-sm">Ver</a>
+        {% if c.status == 'ativo' %}
+        <form method="post" action="/v2/pagar/{{ c.id }}" style="display:flex;gap:0.4rem;flex:1">
+          <input type="number" name="valor" step="0.01" min="0.01"
+            placeholder="R$ valor" style="min-height:36px;font-size:0.82rem;flex:1"
+            value="{{ '%.2f'|format(c.valor_cobranca) }}">
+          <button class="btn btn-success btn-sm" type="submit">✓ Pagar</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="/v2/dashboard" class="active"><span class="icon">🏠</span>Início</a>
+  <a href="/v2/clientes"><span class="icon">👥</span>Clientes</a>
+  <a href="/v2/cadastrar"><span class="icon">➕</span>Novo</a>
+  <a href="/v2/resumo"><span class="icon">📊</span>Resumo</a>
+  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
+</nav>
+{% endblock %}
