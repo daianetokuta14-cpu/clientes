@@ -1,70 +1,184 @@
-<!-- clientes.html v2 -->
 {% extends "base.html" %}
-{% block title %}Clientes — Sistema Avançado{% endblock %}
+{% block title %}Clientes — Mega Credito{% endblock %}
 {% block content %}
 <div class="container has-bottom-nav">
   <div class="page-header">
-    <div class="page-header-left"><h1>Clientes</h1></div>
-    <a href="/v2/cadastrar" class="btn btn-primary btn-sm">+ Novo</a>
+    <div class="page-header-left"><h1>Clientes</h1><p>Histórico completo de contratos</p></div>
+    <a href="/cadastrar" class="btn btn-primary btn-sm">+ Novo</a>
+  </div>
+
+  <!-- Barra de busca -->
+  <div style="margin-bottom:1rem;position:relative">
+    <span style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:1.1rem">🔍</span>
+    <input type="text" id="busca" placeholder="Buscar cliente pelo nome..." 
+      style="padding-left:2.8rem" oninput="filtrarCards()">
   </div>
 
   <div class="tabs">
-    <a href="/v2/clientes" class="tab-btn {{ 'active' if not filtro or filtro == 'todos' }}">Todos</a>
-    <a href="/v2/clientes?f=ativos" class="tab-btn {{ 'active' if filtro == 'ativos' }}">Ativos</a>
-    <a href="/v2/clientes?f=atraso" class="tab-btn {{ 'active' if filtro == 'atraso' }}">Em atraso</a>
-    <a href="/v2/clientes?f=arquiv" class="tab-btn {{ 'active' if filtro == 'arquiv' }}">Arquivados</a>
-    <a href="/v2/clientes?tipo=diaria" class="tab-btn {{ 'active' if tipo == 'diaria' }}">📅 Diária</a>
-    <a href="/v2/clientes?tipo=mensalidade" class="tab-btn {{ 'active' if tipo == 'mensalidade' }}">📆 Mensal</a>
+    <a href="/clientes?f=todos"      class="tab-btn {% if filtro=='todos' %}active{% endif %}">Todos</a>
+    <a href="/clientes?f=ativos"     class="tab-btn {% if filtro=='ativos' %}active{% endif %}">Ativos</a>
+    <a href="/clientes?f=atraso"     class="tab-btn {% if filtro=='atraso' %}active{% endif %}">Em Atraso</a>
+    <a href="/clientes?f=aguardando" class="tab-btn {% if filtro=='aguardando' %}active{% endif %}">Renovação</a>
+    <a href="/clientes?f=arquivados" class="tab-btn {% if filtro=='arquivados' %}active{% endif %}">Arquivados</a>
   </div>
 
-  {% if clientes %}
-  <div class="client-cards">
-  {% for c in clientes %}
-    <div class="client-card {{ 'atraso' if c.dias_em_atraso > 0 }}">
+  <div class="client-cards" id="listaClientes">
+    {% for c in clientes %}
+    <div class="client-card {% if c.dias_em_atraso > 0 %}atraso{% endif %}" data-nome="{{ c.nome|lower }}">
       <div class="client-card-header">
-        <div>
-          <div class="client-card-name">{{ c.nome }}</div>
-          <span class="badge" style="background:rgba(110,159,255,0.1);color:var(--accent2);font-size:0.6rem">
-            {{ '📅 Diária' if c.tipo_cobranca == 'diaria' else '📆 Mensalidade' }}
-          </span>
+        <div style="display:flex;align-items:center;gap:0.7rem">
+          {% if c.foto_url %}
+          <img src="{{ c.foto_url }}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0"
+            onerror="this.style.display='none'">
+          {% endif %}
+          <div>
+            <div class="client-card-name">{{ c.nome }}</div>
+            {% if c.whatsapp %}<div style="font-size:0.75rem;color:var(--muted)">📱 {{ c.whatsapp }}</div>{% endif %}
+            {% if c.dias_em_atraso > 0 %}
+            <div style="font-size:0.72rem;color:var(--danger);margin-top:0.2rem">⚠ {{ c.dias_em_atraso }} dia(s) em atraso</div>
+            {% endif %}
+          </div>
         </div>
         <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
       </div>
-      <div class="client-card-body">
-        {% if c.tipo_cobranca == 'diaria' %}
-        <div><div class="client-card-label">Diárias</div><div class="mono">{{ c.diarias_pagas }}/{{ c.total_diarias }}</div></div>
-        <div><div class="client-card-label">Valor</div><div class="mono green">R$ {{ '%.2f'|format(c.valor_diaria) }}/d</div></div>
-        {% else %}
-        <div><div class="client-card-label">Mensalidade</div><div class="mono green">R$ {{ '%.2f'|format(c.valor_mensalidade) }}</div></div>
-        <div><div class="client-card-label">Vencimento</div><div class="mono">Dia {{ c.dia_vencimento }}</div></div>
-        {% endif %}
-        {% if c.dias_em_atraso > 0 %}
-        <div><div class="client-card-label">Atraso</div><div class="mono" style="color:var(--danger)">{{ c.dias_em_atraso }}d — R$ {{ '%.2f'|format(c.valor_em_atraso) }}</div></div>
-        {% endif %}
-        {% if c.juros_atraso > 0 %}
-        <div><div class="client-card-label">Juros</div><div class="mono" style="color:var(--warn)">{{ c.juros_atraso }}%/dia</div></div>
-        {% endif %}
+
+      <div class="progress-row">
+        <div class="progress-bar"><div class="progress-fill {% if c.diarias_pagas >= 20 %}full{% endif %}" style="width:{{ c.pct }}%"></div></div>
+        <span class="mono" style="color:var(--muted);font-size:0.75rem;white-space:nowrap">{{ c.diarias_pagas }}/20</span>
       </div>
+
+      <div class="client-card-body">
+        <div><div class="client-card-label">Valor/dia</div><div>R$ {{ "%.2f"|format(c.valor_diaria) }}</div></div>
+        <div><div class="client-card-label">Total pago</div><div style="color:var(--accent)">R$ {{ "%.2f"|format(c.total_pago) }}</div></div>
+        {% if c.cpf %}<div><div class="client-card-label">CPF</div><div>{{ c.cpf }}</div></div>{% endif %}
+        {% if c.saldo_pendente > 0 %}<div><div class="client-card-label">Saldo pend.</div><div style="color:var(--warn)">R$ {{ "%.2f"|format(c.saldo_pendente) }}</div></div>{% endif %}
+      </div>
+
       <div class="client-card-actions">
-        <a href="/v2/editar/{{ c.id }}" class="btn btn-secondary btn-sm">Detalhes</a>
+        <button class="btn btn-secondary btn-sm" onclick="verDetalhes({{ loop.index0 }})">👁 Ver</button>
+        <a href="/editar/{{ c.id }}" class="btn btn-secondary btn-sm">✎ Editar</a>
+        {% if role == 'owner' %}
+        <form method="post" action="/apagar/{{ c.id }}" style="display:inline" onsubmit="return confirm('Apagar {{ c.nome }}?')">
+          <button type="submit" class="btn btn-danger btn-sm">✕</button>
+        </form>
+        {% endif %}
       </div>
     </div>
-  {% endfor %}
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono)">Nenhum cliente encontrado.</div>
+    {% endfor %}
   </div>
-  {% else %}
-  <div style="text-align:center;padding:3rem;color:var(--muted)">
-    <div style="font-size:2rem;margin-bottom:0.5rem">👥</div>
-    <p>Nenhum cliente encontrado.</p>
-    <a href="/v2/cadastrar" class="btn btn-primary" style="margin-top:1rem">Cadastrar primeiro cliente</a>
+
+  <div id="semResultado" style="display:none;text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono)">
+    Nenhum cliente encontrado para esta busca.
   </div>
-  {% endif %}
 </div>
 
-<nav class="bottom-nav">
-  <a href="/v2/dashboard"><span class="icon">🏠</span>Início</a>
-  <a href="/v2/clientes" class="active"><span class="icon">👥</span>Clientes</a>
-  <a href="/v2/cadastrar"><span class="icon">➕</span>Novo</a>
-  <a href="/v2/resumo"><span class="icon">📊</span>Resumo</a>
-  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
-</nav>
+<!-- Modal Ver Detalhes -->
+<div class="modal-overlay" id="modalDetalhes" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal" style="max-width:420px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h3 id="detNome" style="margin:0"></h3>
+      <button onclick="document.getElementById('modalDetalhes').classList.remove('active')" 
+        style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+
+    <div id="detFotoWrap" style="text-align:center;margin-bottom:1rem;display:none">
+      <img id="detFoto" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">
+    </div>
+
+    <div class="hist-list" style="margin-bottom:0">
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">📱 WhatsApp</span><span id="detWa">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">🪪 CPF</span><span id="detCpf">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">📍 Endereço</span><span id="detEnd" style="text-align:right;max-width:55%">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">✉️ Email</span><span id="detEmail">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">🔑 Chave Pix</span><span id="detPix">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">💰 Limite</span><span id="detLimite">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">📅 Início</span><span id="detInicio">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">💵 Valor/dia</span><span id="detValor">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">✅ Diárias</span><span id="detDiarias">—</span></div>
+      <div class="hist-item"><span style="color:var(--muted);font-size:0.8rem">💚 Total pago</span><span id="detTotal" style="color:var(--accent);font-weight:500">—</span></div>
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:0.5rem">
+      <a id="detEditLink" href="#" class="btn btn-primary btn-sm" style="flex:1;text-align:center">✎ Editar</a>
+      <a id="detWaLink" href="#" target="_blank" class="btn btn-success btn-sm" style="flex:1;text-align:center;display:none">💬 WhatsApp</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const clientes = [
+  {% for c in clientes %}
+  {
+    id: {{ c.id }},
+    nome: {{ c.nome|tojson }},
+    whatsapp: {{ (c.whatsapp or '')|tojson }},
+    cpf: {{ (c.cpf or '')|tojson }},
+    endereco: {{ (c.endereco or '')|tojson }},
+    email: {{ (c.email or '')|tojson }},
+    chave_pix: {{ (c.chave_pix or '')|tojson }},
+    limite: {{ c.limite or 0 }},
+    data_inicio: {{ c.data_inicio|tojson }},
+    valor_diaria: {{ c.valor_diaria }},
+    diarias_pagas: {{ c.diarias_pagas }},
+    total_pago: {{ c.total_pago }},
+    foto_url: {{ (c.foto_url or '')|tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+function verDetalhes(idx) {
+  const c = clientes[idx];
+  document.getElementById('detNome').textContent = c.nome;
+  document.getElementById('detWa').textContent   = c.whatsapp || '—';
+  document.getElementById('detCpf').textContent  = c.cpf || '—';
+  document.getElementById('detEnd').textContent  = c.endereco || '—';
+  document.getElementById('detEmail').textContent = c.email || '—';
+  document.getElementById('detPix').textContent  = c.chave_pix || '—';
+  document.getElementById('detLimite').textContent = c.limite > 0 ? 'R$ ' + c.limite.toFixed(2) : '—';
+  document.getElementById('detInicio').textContent = c.data_inicio || '—';
+  document.getElementById('detValor').textContent = 'R$ ' + c.valor_diaria.toFixed(2);
+  document.getElementById('detDiarias').textContent = c.diarias_pagas + '/20';
+  document.getElementById('detTotal').textContent = 'R$ ' + c.total_pago.toFixed(2);
+  document.getElementById('detEditLink').href = '/editar/' + c.id;
+
+  // Foto
+  const fotoWrap = document.getElementById('detFotoWrap');
+  const fotoImg  = document.getElementById('detFoto');
+  if (c.foto_url) {
+    fotoImg.src = c.foto_url;
+    fotoWrap.style.display = 'block';
+  } else {
+    fotoWrap.style.display = 'none';
+  }
+
+  // WhatsApp link
+  const waLink = document.getElementById('detWaLink');
+  if (c.whatsapp) {
+    const num = c.whatsapp.replace(/\D/g,'');
+    waLink.href = 'https://wa.me/55' + num;
+    waLink.style.display = '';
+  } else {
+    waLink.style.display = 'none';
+  }
+
+  document.getElementById('modalDetalhes').classList.add('active');
+}
+
+function filtrarCards() {
+  const busca = document.getElementById('busca').value.toLowerCase();
+  const cards = document.querySelectorAll('.client-card');
+  let visiveis = 0;
+  cards.forEach(card => {
+    const nome = card.getAttribute('data-nome') || '';
+    if (nome.includes(busca)) {
+      card.style.display = ''; visiveis++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  document.getElementById('semResultado').style.display = visiveis === 0 ? 'block' : 'none';
+}
+</script>
 {% endblock %}
