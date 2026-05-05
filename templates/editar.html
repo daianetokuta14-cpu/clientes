@@ -1,206 +1,189 @@
 {% extends "base.html" %}
-{% block title %}{{ c.nome }} — Editar{% endblock %}
+{% block title %}Editar — {{ c.nome }}{% endblock %}
 {% block content %}
-<div class="container has-bottom-nav">
+<div class="container">
   <div class="page-header">
-    <div class="page-header-left">
-      <h1>{{ c.nome }}</h1>
-      <p>
-        <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
-        <span class="badge" style="background:rgba(110,159,255,0.1);color:var(--accent2);margin-left:0.3rem">
-          {{ '📅 Diária' if c.tipo_cobranca == 'diaria' else '📆 Mensalidade' }}
-        </span>
-        {% if c.juros_atraso > 0 %}
-        <span class="badge" style="background:rgba(255,184,110,0.1);color:var(--warn);margin-left:0.3rem">
-          Juros {{ c.juros_atraso }}%/dia
-        </span>
-        {% endif %}
-      </p>
+    <div class="page-header-left"><h1>Editar Cliente</h1><p>{{ c.nome }}</p></div>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+      {% if c.status == 'aguardando' %}
+      <button class="btn btn-success" onclick="abrirRenovar()">↻ Renovar Contrato</button>
+      {% endif %}
+      <button class="btn btn-secondary" onclick="copiarLink()" title="Copiar link do cliente">🔗 Link</button>
+      {% if role == 'owner' %}
+      <form method="post" action="/apagar/{{ c.id }}" onsubmit="return confirm('Apagar {{ c.nome }} permanentemente?')">
+        <button type="submit" class="btn btn-danger">✕ Apagar Cliente</button>
+      </form>
+      <form method="post" action="/gerar_link/{{ c.id }}" onsubmit="return confirm('Gerar novo link? O link antigo para de funcionar.')">
+        <button type="submit" class="btn btn-secondary" title="Gerar novo link">↺ Novo link</button>
+      </form>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Resumo financeiro -->
-  <div class="stats-grid">
-    {% if c.tipo_cobranca == 'diaria' %}
-    <div class="stat-card">
-      <div class="stat-label">Diárias pagas</div>
-      <div class="stat-value green">{{ c.diarias_pagas }}/{{ c.total_diarias }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Valor diária</div>
-      <div class="stat-value blue">R$ {{ '%.2f'|format(c.valor_diaria) }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total pago</div>
-      <div class="stat-value">R$ {{ '%.2f'|format(c.total_pago) }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Em atraso</div>
-      <div class="stat-value {{ 'warn' if c.dias_em_atraso > 0 else '' }}">
-        {{ c.dias_em_atraso }}d — R$ {{ '%.2f'|format(c.valor_em_atraso) }}
-      </div>
-    </div>
-    {% else %}
-    <div class="stat-card">
-      <div class="stat-label">Mensalidade</div>
-      <div class="stat-value green">R$ {{ '%.2f'|format(c.valor_mensalidade) }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Vencimento</div>
-      <div class="stat-value blue">Dia {{ c.dia_vencimento }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total pago</div>
-      <div class="stat-value">R$ {{ '%.2f'|format(c.total_pago) }}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Em atraso</div>
-      <div class="stat-value {{ 'warn' if c.dias_em_atraso > 0 else '' }}">
-        {{ c.dias_em_atraso }}d — R$ {{ '%.2f'|format(c.valor_em_atraso) }}
-      </div>
-    </div>
-    {% endif %}
-  </div>
+  <div class="form-card" style="margin-bottom:2rem">
+    <form method="post" action="/editar/{{ c.id }}" enctype="multipart/form-data">
 
-  <!-- Registrar pagamento manual -->
-  {% if c.status == 'ativo' %}
-  <div class="form-card" style="margin-bottom:0.75rem">
-    <div class="divider-label">Registrar pagamento</div>
-    <form method="post" action="/v2/pagar/{{ c.id }}" style="display:flex;gap:0.6rem;flex-wrap:wrap">
-      <input type="number" name="valor" step="0.01" min="0.01"
-        value="{{ '%.2f'|format(c.valor_cobranca) }}"
-        placeholder="Valor (R$)" style="flex:1;min-width:120px">
-      <input type="text" name="obs" placeholder="Obs (opcional)" style="flex:2;min-width:150px">
-      <button type="submit" class="btn btn-primary">✓ Registrar</button>
+      <!-- Foto -->
+      <div class="divider-label">Foto do Cliente</div>
+      <div class="foto-container" onclick="document.getElementById('fotoInputEdit').click()">
+        <img id="fotoPreview"
+          src="{% if c.foto_url %}{{ c.foto_url }}{% else %}/static/default_avatar.png{% endif %}"
+          class="foto-preview"
+          onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><circle cx=%2240%22 cy=%2230%22 r=%2218%22 fill=%22%236b6b80%22/><ellipse cx=%2240%22 cy=%2270%22 rx=%2228%22 ry=%2220%22 fill=%22%236b6b80%22/></svg>'">
+        <div style="font-family:var(--mono);font-size:0.72rem;color:var(--muted)">📷 Toque para alterar foto</div>
+        <input type="file" id="fotoInputEdit" name="foto" accept="image/*" capture="environment" onchange="previewFoto(this)">
+      </div>
+
+      <!-- Dados Pessoais -->
+      <div class="divider-label">Dados Pessoais</div>
+      <div class="form-group"><label>Nome completo</label><input type="text" name="nome" value="{{ c.nome }}" required></div>
+      <div class="form-group"><label>WhatsApp</label><input type="tel" name="whatsapp" value="{{ c.whatsapp or '' }}" placeholder="(00) 00000-0000"></div>
+      <div class="form-row">
+        <div class="form-group"><label>CPF</label><input type="text" name="cpf" value="{{ c.cpf or '' }}" placeholder="000.000.000-00" maxlength="14"></div>
+        <div class="form-group"><label>Limite (R$)</label><input type="number" name="limite" step="0.01" min="0" value="{{ c.limite or 0 }}"></div>
+      </div>
+      <div class="form-group"><label>Endereço</label><input type="text" name="endereco" value="{{ c.endereco or '' }}" placeholder="Rua, número, bairro, cidade"></div>
+      <div class="form-group"><label>Email</label><input type="email" name="email" value="{{ c.email or '' }}" placeholder="email@exemplo.com"></div>
+      <div class="form-group"><label>Chave Pix</label><input type="text" name="chave_pix" value="{{ c.chave_pix or '' }}"></div>
+
+      <!-- Arquivo -->
+      <div class="divider-label">Arquivo / Documento</div>
+      {% if c.arquivo_url %}
+      <div style="margin-bottom:0.8rem;font-family:var(--mono);font-size:0.78rem;color:var(--muted)">
+        📎 Arquivo atual: <a href="{{ c.arquivo_url }}" target="_blank" style="color:var(--accent)">visualizar</a>
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label>Novo arquivo (foto ou PDF)</label>
+        <input type="file" name="arquivo" accept="image/*,.pdf">
+        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);margin-top:0.4rem">Deixe em branco para manter o arquivo atual.</div>
+      </div>
+
+      <!-- Contrato -->
+      <div class="divider-label">Contrato Atual</div>
+      <div class="form-row">
+        <div class="form-group"><label>Valor da diária (R$)</label><input type="number" name="valor_diaria" step="0.01" value="{{ c.valor_diaria }}" required></div>
+        <div class="form-group"><label>Data de início</label><input type="date" name="data_inicio" value="{{ c.data_inicio }}"></div>
+      </div>
+
+      <div style="display:flex;gap:0.7rem;margin-top:0.5rem">
+        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        <a href="/dashboard" class="btn btn-secondary">Cancelar</a>
+      </div>
     </form>
   </div>
-  {% endif %}
 
-  <!-- Parcelas (mensalidade) -->
-  {% if c.tipo_cobranca == 'mensalidade' and parcelas %}
-  <div class="form-card" style="margin-bottom:0.75rem">
-    <div class="divider-label">Parcelas mensais</div>
+  <!-- Pagamentos -->
+  <div class="form-card" style="margin-bottom:2rem">
+    <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">
+      Pagamentos do Contrato Atual
+      <span style="color:var(--accent);margin-left:0.5rem">{{ c.diarias_pagas }}/20 diárias</span>
+    </h3>
+    {% if pags %}
     <div class="hist-list">
-    {% for p in parcelas %}
+      {% for p in pags %}
       <div class="hist-item">
         <div>
-          <div class="mono" style="font-size:0.85rem;font-weight:600">{{ p.competencia }}</div>
-          <div class="hist-date">Venc: {{ p.vencimento }} · Status: {{ p.status }}</div>
+          <div class="nome-col" style="font-size:0.88rem">{{ p.data|replace('-','/')|truncate(10,true,'') }}{% if p.criado_em %} <span style="color:var(--muted);font-size:0.78rem">· {{ p.criado_em.strftime('%H:%M') }}</span>{% endif %}</div>
+          <div class="hist-date">{{ p.diarias }} diária(s){% if p.obs %} · {{ p.obs }}{% endif %}</div>
         </div>
-        <div style="text-align:right">
-          <div class="hist-val">R$ {{ '%.2f'|format(p.valor_pago) }}/{{ '%.2f'|format(p.valor) }}</div>
-          {% if p.pendente > 0 %}
-          <div style="font-size:0.7rem;color:var(--danger)">Pendente: R$ {{ '%.2f'|format(p.pendente) }}</div>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span class="hist-val">R$ {{ "%.2f"|format(p.valor) }}</span>
+          {% if role == 'owner' or role == 'funcionario' %}
+          <form method="post" action="/desfazer/{{ p.id }}" onsubmit="return confirm('Desfazer este pagamento?')">
+            <button type="submit" class="btn btn-danger btn-sm" title="Desfazer">↩</button>
+          </form>
           {% endif %}
         </div>
       </div>
-    {% endfor %}
+      {% endfor %}
     </div>
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-family:var(--mono);font-size:0.85rem">
+      <span style="color:var(--muted)">Total pago neste contrato</span>
+      <span style="color:var(--accent);font-weight:500">R$ {{ "%.2f"|format(c.total_pago) }}</span>
+    </div>
+    {% else %}
+    <p style="color:var(--muted);font-family:var(--mono);font-size:0.82rem">Nenhum pagamento registrado neste contrato.</p>
+    {% endif %}
   </div>
-  {% endif %}
 
-  <!-- Histórico de pagamentos -->
-  {% if pags %}
-  <div class="form-card" style="margin-bottom:0.75rem">
-    <div class="divider-label">Histórico de pagamentos</div>
+  <!-- Histórico de contratos anteriores -->
+  {% if hist %}
+  <div class="form-card">
+    <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">Contratos Anteriores</h3>
     <div class="hist-list">
-    {% for p in pags[:20] %}
+      {% for h in hist %}
       <div class="hist-item">
         <div>
-          <div class="hist-date">{{ p.data }}</div>
-          {% if p.obs %}<div style="font-size:0.75rem;color:var(--muted)">{{ p.obs }}</div>{% endif %}
+          <div class="nome-col" style="font-size:0.88rem">{{ h.data_inicio }} → {{ h.data_fim }}</div>
+          <div class="hist-date">R$ {{ "%.2f"|format(h.valor_diaria) }} / diária</div>
         </div>
-        <div class="hist-val {{ 'danger' if p.valor < 0 else '' }}">R$ {{ '%.2f'|format(p.valor) }}</div>
+        <span class="hist-val">R$ {{ "%.2f"|format(h.total_pago) }}</span>
       </div>
-    {% endfor %}
+      {% endfor %}
     </div>
   </div>
   {% endif %}
-
-  <!-- Editar dados -->
-  <div class="form-card" style="margin-bottom:0.75rem">
-    <div class="divider-label">Editar dados</div>
-    <form method="post" action="/v2/editar/{{ c.id }}" enctype="multipart/form-data">
-      <div class="form-group">
-        <label>Nome</label>
-        <input type="text" name="nome" value="{{ c.nome }}" required>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>WhatsApp</label>
-          <input type="text" name="whatsapp" value="{{ c.whatsapp or '' }}">
-        </div>
-        <div class="form-group">
-          <label>CPF</label>
-          <input type="text" name="cpf" value="{{ c.cpf or '' }}">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Chave PIX</label>
-        <input type="text" name="chave_pix" value="{{ c.chave_pix or '' }}">
-      </div>
-
-      {% if c.tipo_cobranca == 'diaria' %}
-      <div class="form-row">
-        <div class="form-group">
-          <label>Valor da diária (R$)</label>
-          <input type="number" name="valor_diaria" step="0.01" value="{{ c.valor_diaria }}">
-        </div>
-        <div class="form-group">
-          <label>Total de diárias</label>
-          <input type="number" name="total_diarias" value="{{ c.total_diarias }}">
-        </div>
-      </div>
-      {% else %}
-      <div class="form-row">
-        <div class="form-group">
-          <label>Valor da mensalidade (R$)</label>
-          <input type="number" name="valor_mensalidade" step="0.01" value="{{ c.valor_mensalidade }}">
-        </div>
-        <div class="form-group">
-          <label>Dia de vencimento</label>
-          <input type="number" name="dia_vencimento" min="1" max="28" value="{{ c.dia_vencimento }}">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Cobrança recorrente</label>
-        <select name="cobranca_recorrente">
-          <option value="sim" {{ 'selected' if c.cobranca_recorrente }}>Sim</option>
-          <option value="nao" {{ 'selected' if not c.cobranca_recorrente }}>Não</option>
-        </select>
-      </div>
-      {% endif %}
-
-      <div class="form-group">
-        <label>Juros por atraso (%/dia)</label>
-        <input type="number" name="juros_atraso" step="0.01" min="0" value="{{ c.juros_atraso }}">
-      </div>
-      <div class="form-group">
-        <label>Observações do contrato</label>
-        <input type="text" name="obs_contrato" value="{{ c.obs_contrato or '' }}">
-      </div>
-
-      <button type="submit" class="btn btn-primary btn-full">Salvar alterações</button>
-    </form>
-  </div>
-
-  {% if role == 'owner' %}
-  <div class="form-card">
-    <div class="divider-label" style="color:var(--danger)">Zona de perigo</div>
-    <form method="post" action="/v2/apagar/{{ c.id }}"
-      onsubmit="return confirm('Apagar {{ c.nome }} permanentemente? Esta ação não pode ser desfeita.')">
-      <button type="submit" class="btn btn-danger btn-full">🗑 Apagar cliente</button>
-    </form>
-  </div>
-  {% endif %}
-
 </div>
 
-<nav class="bottom-nav">
-  <a href="/v2/dashboard"><span class="icon">🏠</span>Início</a>
-  <a href="/v2/clientes" class="active"><span class="icon">👥</span>Clientes</a>
-  <a href="/v2/cadastrar"><span class="icon">➕</span>Novo</a>
-  <a href="/v2/resumo"><span class="icon">📊</span>Resumo</a>
-  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
-</nav>
+<!-- Modal Renovar -->
+<div class="modal-overlay" id="modalRenovar" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Renovar Contrato</h3>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1.2rem">{{ c.nome }} · Novo ciclo de 20 diárias</p>
+    <form method="post" action="/renovar/{{ c.id }}">
+      <div class="form-group">
+        <label>Novo valor de diária (R$)</label>
+        <input type="number" name="valor_diaria" step="0.01" min="0.01" value="{{ c.valor_diaria }}" required>
+      </div>
+      <div class="form-group">
+        <label>Data de início</label>
+        <input type="date" name="data_inicio" id="renovarData" required>
+      </div>
+      <div style="font-family:var(--mono);font-size:0.78rem;color:var(--muted);margin-bottom:1rem">Histórico anterior será preservado.</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalRenovar').classList.remove('active')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Renovar</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function abrirRenovar() {
+  document.getElementById('renovarData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modalRenovar').classList.add('active');
+}
+function previewFoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => document.getElementById('fotoPreview').src = e.target.result;
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+// Máscara CPF
+const cpfInput = document.querySelector('[name="cpf"]');
+if (cpfInput) cpfInput.addEventListener('input', function() {
+  let v = this.value.replace(/\D/g,'');
+  v = v.replace(/(\d{3})(\d)/,'$1.$2');
+  v = v.replace(/(\d{3})(\d)/,'$1.$2');
+  v = v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  this.value = v;
+});
+// Máscara WhatsApp
+const waInput = document.querySelector('[name="whatsapp"]');
+if (waInput) waInput.addEventListener('input', function() {
+  let v = this.value.replace(/\D/g,'');
+  v = v.replace(/^(\d{2})(\d)/,'($1) $2');
+  v = v.replace(/(\d{5})(\d)/,'$1-$2');
+  this.value = v;
+});
+function copiarLink() {
+  const link = window.location.origin + '/c/{{ c.token_link }}';
+  navigator.clipboard.writeText(link).then(() => {
+    alert('Link copiado:\n' + link);
+  }).catch(() => {
+    prompt('Copie o link abaixo:', link);
+  });
+}
+</script>
 {% endblock %}
