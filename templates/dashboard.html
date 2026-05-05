@@ -14,9 +14,9 @@
   </div>
 
   <div class="stats-grid">
-    <div class="stat-card"><div class="stat-label">Ativos</div><div class="stat-value blue">{{ ativos }}</div></div>
+    <div class="stat-card"><div class="stat-label">Diárias ativas</div><div class="stat-value blue">{{ ativos }}</div></div>
+    <div class="stat-card"><div class="stat-label">Mensalidades</div><div class="stat-value blue">{{ qtd_mensais }}</div></div>
     <div class="stat-card"><div class="stat-label">Hoje</div><div class="stat-value green">R$ {{ "%.2f"|format(total_hoje) }}</div></div>
-    <div class="stat-card"><div class="stat-label">Renovação</div><div class="stat-value warn">{{ aguardando }}</div></div>
     <div class="stat-card" style="{% if em_atraso > 0 %}border-color:var(--danger){% endif %}">
       <div class="stat-label">Em Atraso</div>
       <div class="stat-value" style="color:var(--danger)">{{ em_atraso }}</div>
@@ -150,24 +150,40 @@
       </div>
 
       <div class="progress-row">
-        <div class="progress-bar"><div class="progress-fill {% if c.diarias_pagas >= 20 %}full{% endif %}" style="width:{{ c.pct }}%"></div></div>
-        <span class="mono" style="color:var(--muted);font-size:0.75rem;white-space:nowrap">{{ c.diarias_pagas }}/20</span>
+        {% if c.tipo_cobranca == 'diaria' %}
+        <div class="progress-bar"><div class="progress-fill {% if c.diarias_pagas >= c.total_diarias %}full{% endif %}" style="width:{{ c.pct }}%"></div></div>
+        <span class="mono" style="color:var(--muted);font-size:0.75rem;white-space:nowrap">{{ c.diarias_pagas }}/{{ c.total_diarias }}</span>
+        {% else %}
+        <span class="mono" style="font-size:0.72rem;color:var(--accent2)">📆 Mensalidade — R$ {{ "%.2f"|format(c.valor_mensalidade) }}/mês · Vence dia {{ c.dia_vencimento }}</span>
+        {% endif %}
       </div>
 
       <div class="client-card-body">
+        {% if c.tipo_cobranca == 'diaria' %}
         <div><div class="client-card-label">Valor/dia</div><div>R$ {{ "%.2f"|format(c.valor_diaria) }}</div></div>
         <div><div class="client-card-label">Total pago</div><div style="color:var(--accent)">R$ {{ "%.2f"|format(c.total_pago) }}</div></div>
         {% if c.saldo_pendente > 0 %}
         <div><div class="client-card-label">Saldo pend.</div><div style="color:var(--warn)">R$ {{ "%.2f"|format(c.saldo_pendente) }}</div></div>
         {% endif %}
+        {% else %}
+        <div><div class="client-card-label">Mensalidade</div><div style="color:var(--accent)">R$ {{ "%.2f"|format(c.valor_mensalidade) }}</div></div>
+        <div><div class="client-card-label">Total pago</div><div>R$ {{ "%.2f"|format(c.total_pago) }}</div></div>
+        {% if c.juros_atraso > 0 %}
+        <div><div class="client-card-label">Juros</div><div style="color:var(--warn)">{{ c.juros_atraso }}%/dia</div></div>
+        {% endif %}
+        {% endif %}
         {% if c.whatsapp %}<div><div class="client-card-label">WhatsApp</div><div>{{ c.whatsapp }}</div></div>{% endif %}
       </div>
 
       <div class="client-card-actions">
-        {% if c.status == 'aguardando' %}
-          <button class="btn btn-success btn-sm" onclick="abrirRenovar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }})">↻ Renovar</button>
+        {% if c.tipo_cobranca == 'diaria' %}
+          {% if c.status == 'aguardando' %}
+            <button class="btn btn-success btn-sm" onclick="abrirRenovar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }})">↻ Renovar</button>
+          {% else %}
+            <button class="btn btn-primary btn-sm" onclick="abrirPagar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }}, {{ c.total_diarias - c.diarias_pagas }}, {{ c.saldo_pendente }}, {{ c.diarias_pagas }})">✓ Pagar</button>
+          {% endif %}
         {% else %}
-          <button class="btn btn-primary btn-sm" onclick="abrirPagar({{ c.id }}, '{{ c.nome }}', {{ c.valor_diaria }}, {{ 20 - c.diarias_pagas }}, {{ c.saldo_pendente }}, {{ c.diarias_pagas }})">✓ Pagar</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirPagarMensal({{ c.id }}, '{{ c.nome }}', {{ c.valor_mensalidade }}, {{ c.valor_em_atraso }})">✓ Pagar</button>
         {% endif %}
         <a href="/editar/{{ c.id }}" class="btn btn-secondary btn-sm">✎ Editar</a>
         {% if role == 'owner' %}
@@ -252,6 +268,28 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalPagar').classList.remove('active')">Cancelar</button>
         <button type="submit" class="btn btn-primary" onclick="return prepararSubmit()">Confirmar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Pagar Mensalidade -->
+<div class="modal-overlay" id="modalMensal" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Pagar Mensalidade</h3>
+    <p id="mMensalNome" style="color:var(--muted);font-size:0.85rem;margin-bottom:0.75rem"></p>
+    <form method="post" id="formMensal" action="">
+      <div class="form-group">
+        <label>Valor recebido (R$)</label>
+        <input type="number" name="valor" id="mMensalValor" step="0.01" min="0.01" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Observação (opcional)</label>
+        <input type="text" name="obs" placeholder="Ex: Pix recebido">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalMensal').classList.remove('active')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Confirmar</button>
       </div>
     </form>
   </div>
@@ -374,6 +412,13 @@ function prepararSubmit() {
     document.getElementById('mPagarValor').value = v.toFixed(2);
   }
   return true;
+}
+
+function abrirPagarMensal(id, nome, valorMensal, valorAtraso) {
+  document.getElementById('mMensalNome').textContent = nome + ' · R$ ' + valorMensal.toFixed(2) + '/mês';
+  document.getElementById('mMensalValor').value = (valorAtraso > 0 ? valorAtraso : valorMensal).toFixed(2);
+  document.getElementById('formMensal').action = '/pagar_mensalidade/' + id;
+  document.getElementById('modalMensal').classList.add('active');
 }
 
 function abrirPagar(id, nome, valorDia, restantes, saldo, diariasAtuais) {
