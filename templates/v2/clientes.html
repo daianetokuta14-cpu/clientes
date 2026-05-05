@@ -1,0 +1,70 @@
+<!-- clientes.html v2 -->
+{% extends "base.html" %}
+{% block title %}Clientes — Sistema Avançado{% endblock %}
+{% block content %}
+<div class="container has-bottom-nav">
+  <div class="page-header">
+    <div class="page-header-left"><h1>Clientes</h1></div>
+    <a href="/v2/cadastrar" class="btn btn-primary btn-sm">+ Novo</a>
+  </div>
+
+  <div class="tabs">
+    <a href="/v2/clientes" class="tab-btn {{ 'active' if not filtro or filtro == 'todos' }}">Todos</a>
+    <a href="/v2/clientes?f=ativos" class="tab-btn {{ 'active' if filtro == 'ativos' }}">Ativos</a>
+    <a href="/v2/clientes?f=atraso" class="tab-btn {{ 'active' if filtro == 'atraso' }}">Em atraso</a>
+    <a href="/v2/clientes?f=arquiv" class="tab-btn {{ 'active' if filtro == 'arquiv' }}">Arquivados</a>
+    <a href="/v2/clientes?tipo=diaria" class="tab-btn {{ 'active' if tipo == 'diaria' }}">📅 Diária</a>
+    <a href="/v2/clientes?tipo=mensalidade" class="tab-btn {{ 'active' if tipo == 'mensalidade' }}">📆 Mensal</a>
+  </div>
+
+  {% if clientes %}
+  <div class="client-cards">
+  {% for c in clientes %}
+    <div class="client-card {{ 'atraso' if c.dias_em_atraso > 0 }}">
+      <div class="client-card-header">
+        <div>
+          <div class="client-card-name">{{ c.nome }}</div>
+          <span class="badge" style="background:rgba(110,159,255,0.1);color:var(--accent2);font-size:0.6rem">
+            {{ '📅 Diária' if c.tipo_cobranca == 'diaria' else '📆 Mensalidade' }}
+          </span>
+        </div>
+        <span class="badge badge-{{ c.status }}">{{ c.status }}</span>
+      </div>
+      <div class="client-card-body">
+        {% if c.tipo_cobranca == 'diaria' %}
+        <div><div class="client-card-label">Diárias</div><div class="mono">{{ c.diarias_pagas }}/{{ c.total_diarias }}</div></div>
+        <div><div class="client-card-label">Valor</div><div class="mono green">R$ {{ '%.2f'|format(c.valor_diaria) }}/d</div></div>
+        {% else %}
+        <div><div class="client-card-label">Mensalidade</div><div class="mono green">R$ {{ '%.2f'|format(c.valor_mensalidade) }}</div></div>
+        <div><div class="client-card-label">Vencimento</div><div class="mono">Dia {{ c.dia_vencimento }}</div></div>
+        {% endif %}
+        {% if c.dias_em_atraso > 0 %}
+        <div><div class="client-card-label">Atraso</div><div class="mono" style="color:var(--danger)">{{ c.dias_em_atraso }}d — R$ {{ '%.2f'|format(c.valor_em_atraso) }}</div></div>
+        {% endif %}
+        {% if c.juros_atraso > 0 %}
+        <div><div class="client-card-label">Juros</div><div class="mono" style="color:var(--warn)">{{ c.juros_atraso }}%/dia</div></div>
+        {% endif %}
+      </div>
+      <div class="client-card-actions">
+        <a href="/v2/editar/{{ c.id }}" class="btn btn-secondary btn-sm">Detalhes</a>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:var(--muted)">
+    <div style="font-size:2rem;margin-bottom:0.5rem">👥</div>
+    <p>Nenhum cliente encontrado.</p>
+    <a href="/v2/cadastrar" class="btn btn-primary" style="margin-top:1rem">Cadastrar primeiro cliente</a>
+  </div>
+  {% endif %}
+</div>
+
+<nav class="bottom-nav">
+  <a href="/v2/dashboard"><span class="icon">🏠</span>Início</a>
+  <a href="/v2/clientes" class="active"><span class="icon">👥</span>Clientes</a>
+  <a href="/v2/cadastrar"><span class="icon">➕</span>Novo</a>
+  <a href="/v2/resumo"><span class="icon">📊</span>Resumo</a>
+  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
+</nav>
+{% endblock %}
