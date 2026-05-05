@@ -2,30 +2,16 @@
 {% block title %}Login — Mega Credito{% endblock %}
 {% block extra_css %}
 <style>
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
-.login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;width:100%;max-width:400px}
-.login-logo{font-size:2rem;font-weight:800;color:var(--accent);text-align:center;margin-bottom:0.3rem}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:2.5rem;width:100%;max-width:400px}
+.login-logo{font-size:2rem;font-weight:800;color:var(--accent);text-align:center;margin-bottom:0.4rem}
 .login-logo span{color:var(--text)}
-.login-sub{text-align:center;color:var(--muted);font-size:0.82rem;margin-bottom:1.5rem;font-family:var(--mono)}
-
-/* Seleção de sistema */
-.sistema-label{font-family:var(--mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:0.6rem;text-align:center}
-.sistema-btns{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:1.25rem}
-.sistema-btn{padding:0.85rem 0.5rem;border:1px solid var(--border);border-radius:10px;background:var(--surface2);cursor:pointer;font-family:var(--sans);font-size:0.8rem;font-weight:700;color:var(--muted);text-align:center;transition:all 0.2s;line-height:1.4}
-.sistema-btn .s-icon{font-size:1.3rem;display:block;margin-bottom:0.3rem}
-.sistema-btn .s-badge{display:inline-block;font-size:0.6rem;font-family:var(--mono);padding:0.1rem 0.4rem;border-radius:4px;margin-top:0.2rem;background:rgba(110,159,255,0.15);color:var(--accent2)}
-.sistema-btn:hover,.sistema-btn.selected{border-color:var(--accent);color:var(--accent);background:rgba(127,255,110,0.07)}
-.sistema-btn.selected .s-badge{background:rgba(127,255,110,0.15);color:var(--accent)}
-
-/* Seleção de role */
-.role-label{font-family:var(--mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:0.6rem;text-align:center}
-.role-btns{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:1.25rem}
-.role-btn{padding:0.85rem;border:1px solid var(--border);border-radius:10px;background:var(--surface2);cursor:pointer;font-family:var(--sans);font-size:0.85rem;font-weight:700;color:var(--muted);text-align:center;transition:all 0.2s}
+.login-sub{text-align:center;color:var(--muted);font-size:0.85rem;margin-bottom:2rem;font-family:var(--mono)}
+.role-btns{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.5rem}
+.role-btn{padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-family:var(--sans);font-size:0.9rem;font-weight:700;color:var(--text);text-align:center;transition:all 0.2s}
 .role-btn:hover,.role-btn.selected{border-color:var(--accent);color:var(--accent);background:rgba(127,255,110,0.07)}
-
-/* PIN */
 .pin-area{display:none}
-.pin-label{font-family:var(--mono);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;text-align:center}
+.pin-label{font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.5rem;text-align:center}
 .pin-dots{display:flex;gap:0.6rem;justify-content:center;margin-bottom:1.2rem}
 .pin-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border);background:transparent;transition:all 0.15s}
 .pin-dot.filled{background:var(--accent);border-color:var(--accent)}
@@ -34,60 +20,20 @@
 .numpad-btn:hover{border-color:var(--accent);color:var(--accent)}
 .numpad-btn:active{transform:scale(0.95)}
 .pin-error{color:var(--danger);font-family:var(--mono);font-size:0.78rem;text-align:center;margin-top:0.75rem;min-height:1rem}
-
-/* Divider */
-.step-divider{border:none;border-top:1px solid var(--border);margin:1.25rem 0}
-
-/* Indicador de etapa */
-.step-indicator{display:flex;align-items:center;gap:0.5rem;justify-content:center;margin-bottom:1.5rem}
-.step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all 0.3s}
-.step-dot.active{background:var(--accent);width:20px;border-radius:4px}
-.step-dot.done{background:var(--accent2)}
 </style>
 {% endblock %}
 {% block content %}
 <div class="login-wrap">
   <div class="login-card">
     <div class="login-logo">Mega<span> Credito</span></div>
-    <div class="login-sub">sistema de controle financeiro</div>
+    <div class="login-sub">sistema de controle de diárias</div>
 
-    <!-- Indicador de etapas -->
-    <div class="step-indicator">
-      <div class="step-dot active" id="dot1"></div>
-      <div class="step-dot" id="dot2"></div>
-      <div class="step-dot" id="dot3"></div>
+    <div class="role-btns">
+      <div class="role-btn" id="btnOwner" onclick="selectRole('owner')">👑<br>Owner</div>
+      <div class="role-btn" id="btnFunc"  onclick="selectRole('funcionario')">👤<br>Funcionário</div>
     </div>
 
-    <!-- ETAPA 1: Escolha do sistema -->
-    <div id="etapa1">
-      <div class="sistema-label">Selecione o sistema</div>
-      <div class="sistema-btns">
-        <div class="sistema-btn" id="btnDiaria" onclick="selectSistema('diaria')">
-          <span class="s-icon">📅</span>
-          Diária
-          <span class="s-badge">Simples</span>
-        </div>
-        <div class="sistema-btn" id="btnAvancado" onclick="selectSistema('avancado')">
-          <span class="s-icon">📊</span>
-          Diária + Mensalidade
-          <span class="s-badge">Avançado</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ETAPA 2: Escolha do role (aparece após selecionar sistema) -->
-    <div id="etapa2" style="display:none">
-      <hr class="step-divider">
-      <div class="role-label">Quem está entrando?</div>
-      <div class="role-btns">
-        <div class="role-btn" id="btnOwner" onclick="selectRole('owner')">👑<br>Owner</div>
-        <div class="role-btn" id="btnFunc"  onclick="selectRole('funcionario')">👤<br>Funcionário</div>
-      </div>
-    </div>
-
-    <!-- ETAPA 3: PIN (aparece após selecionar role) -->
     <div class="pin-area" id="pinArea">
-      <hr class="step-divider">
       <div class="pin-label">Digite o PIN</div>
       <div class="pin-dots">
         <div class="pin-dot" id="d0"></div>
@@ -99,55 +45,37 @@
       <div class="pin-error" id="pinError">{% if error %}{{ error }}{% endif %}</div>
     </div>
 
-    <!-- Form oculto -->
+    <!-- form oculto enviado pelo JS -->
     <form id="loginForm" method="post" action="/" style="display:none">
-      <input type="hidden" name="role"    id="fRole">
-      <input type="hidden" name="pin"     id="fPin">
-      <input type="hidden" name="sistema" id="fSistema">
+      <input type="hidden" name="role" id="fRole">
+      <input type="hidden" name="pin"  id="fPin">
     </form>
   </div>
 </div>
 
 <script>
-let selectedRole = null, selectedSistema = null, pinBuffer = '';
-
-function selectSistema(s) {
-  selectedSistema = s;
-  document.querySelectorAll('.sistema-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById(s === 'diaria' ? 'btnDiaria' : 'btnAvancado').classList.add('selected');
-  // Mostra etapa 2
-  document.getElementById('etapa2').style.display = 'block';
-  // Atualiza indicador
-  document.getElementById('dot1').classList.remove('active');
-  document.getElementById('dot1').classList.add('done');
-  document.getElementById('dot2').classList.add('active');
-  // Reset role e pin
-  selectedRole = null; pinBuffer = '';
-  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('pinArea').style.display = 'none';
-}
+let selectedRole = null, pinBuffer = '';
 
 function selectRole(r) {
-  if (!selectedSistema) return;
   selectedRole = r;
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById(r === 'owner' ? 'btnOwner' : 'btnFunc').classList.add('selected');
-  // Mostra PIN
   document.getElementById('pinArea').style.display = 'block';
-  pinBuffer = ''; renderDots(); buildNumpad();
+  pinBuffer = '';
+  renderDots();
+  buildNumpad();
   document.getElementById('pinError').textContent = '';
-  // Atualiza indicador
-  document.getElementById('dot2').classList.remove('active');
-  document.getElementById('dot2').classList.add('done');
-  document.getElementById('dot3').classList.add('active');
 }
 
 function buildNumpad() {
-  const np = document.getElementById('numpad'); np.innerHTML = '';
+  const np = document.getElementById('numpad');
+  np.innerHTML = '';
   ['1','2','3','4','5','6','7','8','9','⌫','0','✓'].forEach(k => {
     const d = document.createElement('div');
-    d.className = 'numpad-btn'; d.textContent = k;
-    d.onclick = () => handleKey(k); np.appendChild(d);
+    d.className = 'numpad-btn';
+    d.textContent = k;
+    d.onclick = () => handleKey(k);
+    np.appendChild(d);
   });
 }
 
@@ -164,18 +92,10 @@ function handleKey(k) {
 }
 
 function submit() {
-  if (!selectedRole || !selectedSistema || pinBuffer.length !== 4) return;
-  document.getElementById('fRole').value    = selectedRole;
-  document.getElementById('fPin').value     = pinBuffer;
-  document.getElementById('fSistema').value = selectedSistema;
+  if (!selectedRole || pinBuffer.length !== 4) return;
+  document.getElementById('fRole').value = selectedRole;
+  document.getElementById('fPin').value  = pinBuffer;
   document.getElementById('loginForm').submit();
 }
-
-// Se voltou com erro, mostra todas as etapas
-{% if error %}
-document.getElementById('etapa2').style.display = 'block';
-document.getElementById('pinArea').style.display = 'block';
-buildNumpad();
-{% endif %}
 </script>
 {% endblock %}
