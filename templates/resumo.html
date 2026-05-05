@@ -1,53 +1,186 @@
 {% extends "base.html" %}
-{% block title %}Resumo — Sistema Avançado{% endblock %}
+{% block title %}Resumo{% endblock %}
 {% block content %}
-<div class="container has-bottom-nav">
+<style>
+.mes-tabs{display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1.2rem}
+.mes-tab{font-family:var(--mono);font-size:0.78rem;padding:0.35rem 0.8rem;border-radius:20px;border:1px solid var(--border);color:var(--muted);text-decoration:none;transition:all 0.15s;white-space:nowrap}
+.mes-tab:hover{border-color:var(--accent);color:var(--accent)}
+.mes-tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.search-bar{display:flex;gap:0.5rem;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.9rem;margin-bottom:0.7rem}
+.search-bar input{flex:1;background:transparent;border:none;outline:none;font-family:var(--mono);font-size:0.85rem;color:var(--text)}
+.search-bar input::placeholder{color:var(--muted)}
+.search-bar button{background:transparent;border:none;cursor:pointer;font-size:1rem;color:var(--muted);padding:0}
+.tag-filtro{display:inline-flex;align-items:center;gap:0.4rem;background:var(--surface);border:1px solid var(--accent);border-radius:20px;font-family:var(--mono);font-size:0.75rem;color:var(--accent);padding:0.2rem 0.7rem;margin-bottom:0.9rem}
+
+/* Separador de dia */
+.tx-day-sep{
+  padding:0.5rem 1rem 0.3rem;
+  font-family:var(--mono);
+  font-size:0.72rem;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  border-bottom:1px solid var(--border);
+  margin-top:0.5rem;
+}
+.tx-day-sep:first-child{margin-top:0}
+
+/* Linha de transação — igual extrato bancário */
+.tx-row{
+  display:flex;
+  align-items:center;
+  gap:0.9rem;
+  padding:0.75rem 1rem;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  text-decoration:none;
+}
+.tx-row:last-child{border-bottom:none}
+
+/* Ícone */
+.tx-icon{
+  width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;flex-shrink:0;
+}
+.tx-icon.entrada{background:rgba(0,200,120,0.12)}
+.tx-icon.saida{background:rgba(255,80,80,0.1)}
+
+/* Texto central */
+.tx-info{flex:1;min-width:0}
+.tx-nome{font-size:0.88rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-sub{font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-top:0.1rem}
+
+/* Valor */
+.tx-val{font-family:var(--mono);font-weight:700;font-size:0.92rem;white-space:nowrap}
+</style>
+
+<div class="container">
   <div class="page-header">
     <div class="page-header-left">
-      <h1>Resumo</h1>
-      <p>Total do período: <strong style="color:var(--accent)">R$ {{ '%.2f'|format(total_mes) }}</strong></p>
+      <h1>📊 Resumo</h1>
+      <p>Histórico de pagamentos</p>
     </div>
   </div>
 
-  <!-- Seletor de mês -->
-  <div class="tabs" style="flex-wrap:wrap">
+  <!-- Abas de mês -->
+  {% if meses %}
+  <div class="mes-tabs">
+    <a href="/resumo" class="mes-tab {% if not mes_sel and not modo_geral %}active{% endif %}">Todos</a>
     {% for m in meses %}
-    <a href="/v2/resumo?mes={{ m }}" class="tab-btn {{ 'active' if m == mes_sel }}">{{ m }}</a>
+    <a href="/resumo?mes={{ m }}" class="mes-tab {% if m == mes_sel and not modo_geral %}active{% endif %}">
+      {{ m[5:] }}/{{ m[:4] }}
+    </a>
     {% endfor %}
   </div>
+  {% endif %}
 
-  {% if pags_lista %}
-  <div class="hist-list" style="margin-top:1rem">
-  {% for p in pags_lista %}
-    {% set c = clientes_map.get(p.cliente_id) %}
-    <div class="hist-item">
-      <div>
-        <div style="font-size:0.88rem;font-weight:600">{{ c.nome if c else '—' }}</div>
-        <div class="hist-date">
-          {{ p.data }}
-          {% if c %}
-          · <span style="color:var(--accent2)">{{ '📅 Diária' if c.tipo_cobranca == 'diaria' else '📆 Mensalidade' }}</span>
-          {% endif %}
-        </div>
-        {% if p.obs %}<div style="font-size:0.72rem;color:var(--muted)">{{ p.obs }}</div>{% endif %}
-      </div>
-      <div class="hist-val">R$ {{ '%.2f'|format(p.valor) }}</div>
+  <!-- Pesquisa por nome -->
+  <form method="get" action="/resumo" id="formNome">
+    {% if mes_sel and not modo_geral %}<input type="hidden" name="mes" value="{{ mes_sel }}">{% endif %}
+    <div class="search-bar">
+      <span>🔍</span>
+      <input type="text" name="q" id="inputNome" placeholder="Pesquisar cliente…" value="{{ busca_nome }}" autocomplete="off">
+      {% if busca_nome %}
+      <a href="/resumo{% if mes_sel %}?mes={{ mes_sel }}{% endif %}" style="color:var(--danger);text-decoration:none">✕</a>
+      {% else %}
+      <button type="submit">→</button>
+      {% endif %}
     </div>
-  {% endfor %}
+  </form>
+
+  <!-- Pesquisa por dia -->
+  <form method="get" action="/resumo" id="formDia">
+    {% if mes_sel and not busca_nome %}<input type="hidden" name="mes" value="{{ mes_sel }}">{% endif %}
+    {% if busca_nome %}<input type="hidden" name="q" value="{{ busca_nome }}">{% endif %}
+    <div class="search-bar">
+      <span>📅</span>
+      <input type="text" name="dia" id="inputDia" placeholder="Filtrar por dia: 28/04/2026" value="{{ busca_dia }}" autocomplete="off">
+      {% if busca_dia %}
+      <a href="/resumo{% if mes_sel %}?mes={{ mes_sel }}{% endif %}{% if busca_nome %}&q={{ busca_nome }}{% endif %}" style="color:var(--danger);text-decoration:none">✕</a>
+      {% else %}
+      <button type="submit">→</button>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Tags ativas -->
+  {% if busca_nome or busca_dia %}
+  <div style="margin-bottom:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+    {% if busca_nome %}
+    <div class="tag-filtro">👤 {{ busca_nome }}
+      <a href="/resumo{% if mes_sel %}?mes={{ mes_sel }}{% endif %}{% if busca_dia %}&dia={{ busca_dia }}{% endif %}" style="color:var(--danger);text-decoration:none;margin-left:0.3rem">✕</a>
+    </div>
+    {% endif %}
+    {% if busca_dia %}
+    <div class="tag-filtro">📅 {{ busca_dia }}
+      <a href="/resumo{% if mes_sel %}?mes={{ mes_sel }}{% endif %}{% if busca_nome %}&q={{ busca_nome }}{% endif %}" style="color:var(--danger);text-decoration:none;margin-left:0.3rem">✕</a>
+    </div>
+    {% endif %}
   </div>
+  {% endif %}
+
+  <!-- Info período + total -->
+  <div style="font-family:var(--mono);font-size:0.82rem;color:var(--muted);margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+    <span>
+      {% if modo_geral %}Histórico geral{% elif mes_sel %}{{ mes_sel[5:] }}/{{ mes_sel[:4] }}{% else %}Todos os meses{% endif %}
+      {% if pags_lista %} · {{ pags_lista|length }} transação(ões){% endif %}
+    </span>
+    <span style="color:var(--accent);font-weight:700">Total: R$ {{ "%.2f"|format(total_mes) }}</span>
+  </div>
+
+  <!-- Lista estilo extrato -->
+  {% if pags_lista %}
+    {% set ns = namespace(last_date='') %}
+    {% for p in pags_lista %}
+      {% set data_fmt = p.data[8:10] + '/' + p.data[5:7] + '/' + p.data[:4] %}
+      {% if p.data != ns.last_date %}
+        <div class="tx-day-sep">{{ data_fmt }}</div>
+        {% set ns.last_date = p.data %}
+      {% endif %}
+
+      {% set c = clientes_map[p.cliente_id] %}
+      {% set entrada = p.valor >= 0 %}
+
+      <div class="tx-row">
+        <div class="tx-icon {% if entrada %}entrada{% else %}saida{% endif %}">
+          {% if entrada %}⬇{% else %}⬆{% endif %}
+        </div>
+        <div class="tx-info">
+          <div class="tx-nome">{{ c.nome }}</div>
+          <div class="tx-sub">
+            {% if p.criado_em %}{{ p.criado_em.strftime("%H:%M") }}{% else %}—{% endif %}{% if p.obs %} · {{ p.obs }}{% endif %}
+          </div>
+        </div>
+        <div class="tx-val" style="color:{% if entrada %}var(--accent){% else %}var(--danger){% endif %}">
+          {% if entrada %}+{% else %}−{% endif %} R$ {{ "%.2f"|format(p.valor|abs) }}
+        </div>
+      </div>
+    {% endfor %}
   {% else %}
-  <div style="text-align:center;padding:3rem;color:var(--muted)">
-    <div style="font-size:2rem;margin-bottom:0.5rem">📊</div>
-    <p>Nenhum pagamento neste período.</p>
-  </div>
+    <div style="text-align:center;padding:3rem 1rem">
+      <div style="font-size:2rem;margin-bottom:0.75rem">📭</div>
+      <p style="font-family:var(--mono);color:var(--muted);font-size:0.85rem">
+        {% if busca_nome %}Nenhuma transação para "{{ busca_nome }}"
+        {% elif busca_dia %}Nenhuma transação em {{ busca_dia }}
+        {% else %}Nenhum pagamento registrado{% endif %}.
+      </p>
+    </div>
   {% endif %}
 </div>
 
-<nav class="bottom-nav">
-  <a href="/v2/dashboard"><span class="icon">🏠</span>Início</a>
-  <a href="/v2/clientes"><span class="icon">👥</span>Clientes</a>
-  <a href="/v2/cadastrar"><span class="icon">➕</span>Novo</a>
-  <a href="/v2/resumo" class="active"><span class="icon">📊</span>Resumo</a>
-  <a href="/dashboard" style="font-size:0.55rem"><span class="icon">📅</span>Diária</a>
-</nav>
+<script>
+document.getElementById('inputNome').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){e.preventDefault();document.getElementById('formNome').submit();}
+});
+document.getElementById('inputDia').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){e.preventDefault();document.getElementById('formDia').submit();}
+});
+document.getElementById('inputDia').addEventListener('input',function(){
+  let v=this.value.replace(/\D/g,'');
+  if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2);
+  if(v.length>5) v=v.slice(0,5)+'/'+v.slice(5);
+  if(v.length>10) v=v.slice(0,10);
+  this.value=v;
+});
+</script>
 {% endblock %}
