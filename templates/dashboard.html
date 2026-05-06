@@ -23,6 +23,28 @@
     </div>
   </div>
 
+  {% if role == 'owner' %}
+  <div style="background:var(--surface);border:1px solid rgba(127,255,110,0.2);border-radius:10px;padding:1rem 1.2rem;margin-bottom:1.2rem">
+    <div style="font-family:var(--mono);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:0.75rem">
+      📊 Projeção financeira — contratos ativos
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;text-align:center">
+      <div>
+        <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">Já recebido</div>
+        <div style="font-family:var(--mono);font-weight:800;font-size:1.1rem;color:var(--accent)">R$ {{ "%.2f"|format(ja_recebido) }}</div>
+      </div>
+      <div style="border-left:1px solid var(--border);border-right:1px solid var(--border)">
+        <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">A receber</div>
+        <div style="font-family:var(--mono);font-weight:800;font-size:1.1rem;color:var(--warn)">R$ {{ "%.2f"|format(a_receber) }}</div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">Total previsto</div>
+        <div style="font-family:var(--mono);font-weight:800;font-size:1.1rem;color:var(--text)">R$ {{ "%.2f"|format(total_projetado) }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- ═══════════ SIMULADOR ═══════════ -->
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:1.2rem;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:0.8rem 1rem;border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleSim()">
