@@ -198,24 +198,23 @@ def dashboard():
     em_atraso  = [c for c in clientes if c.dias_em_atraso > 0]
 
     # ── Projeção financeira (só owner) ──────────────────────────
-    # Já recebido — todos os pagamentos positivos de todos os tempos
-    ja_recebido = sum(
-        p.valor for p in Pagamento.query.all() if p.valor > 0
-    )
-    # A receber — diárias: (total_diarias - diarias_pagas) * valor_diaria
-    # A receber — mensalidade: parcela pendente do mês atual
-    a_receber = 0.0
+    # Já recebido = soma do contrato ATUAL de cada cliente (não histórico)
+    # Diária: diarias_pagas * valor_diaria + saldo_pendente
+    # Mensalidade: total pago neste mês (parcela atual)
+    ja_recebido = 0.0
+    a_receber   = 0.0
     for c in clientes:
         if c.tipo_cobranca == 'diaria':
-            restantes = max(0, c.total_diarias - c.diarias_pagas)
-            a_receber += restantes * c.valor_diaria
-            if c.saldo_pendente > 0:
-                a_receber -= c.saldo_pendente  # saldo já pago conta
+            ja_recebido += round(c.diarias_pagas * c.valor_diaria + c.saldo_pendente, 2)
+            restantes    = max(0, c.total_diarias - c.diarias_pagas)
+            a_receber   += round(restantes * c.valor_diaria - c.saldo_pendente, 2)
         else:
             parcela = c._parcela_mes_atual()
             if parcela:
-                a_receber += parcela.pendente
-    a_receber = max(0, round(a_receber, 2))
+                ja_recebido += parcela.valor_pago
+                a_receber   += parcela.pendente
+    ja_recebido     = max(0, round(ja_recebido, 2))
+    a_receber       = max(0, round(a_receber, 2))
     total_projetado = round(ja_recebido + a_receber, 2)
 
     return render_template('dashboard.html',
