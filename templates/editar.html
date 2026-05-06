@@ -201,9 +201,8 @@
         <div style="display:flex;align-items:center;gap:0.75rem">
           <span class="hist-val" style="{{ 'color:var(--danger)' if p.valor < 0 else '' }}">R$ {{ '%.2f'|format(p.valor) }}</span>
           {% if role == 'owner' or role == 'funcionario' %}
-          <form method="post" action="/desfazer/{{ p.id }}" onsubmit="return confirm('Desfazer este pagamento?')">
-            <button type="submit" class="btn btn-danger btn-sm" title="Desfazer">↩</button>
-          </form>
+          <button type="button" class="btn btn-danger btn-sm" title="Remover parcela"
+            onclick="abrirDesfazer({{ p.id }}, {{ p.valor }})">↩</button>
           {% endif %}
         </div>
       </div>
@@ -263,7 +262,46 @@
 </div>
 {% endif %}
 
+<!-- Modal Remover Parcela -->
+<div class="modal-overlay" id="modalDesfazer" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Remover Parcela</h3>
+    <p id="desfazerInfo" style="color:var(--muted);font-size:0.85rem;margin-bottom:0.75rem"></p>
+    <form method="post" id="formDesfazer" action="">
+      <div class="form-group">
+        <label>Valor a remover (R$)</label>
+        <input type="number" name="valor" id="desfazerValor" step="0.01" min="0.01"
+          inputmode="decimal" style="border-color:var(--danger)" required>
+        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);margin-top:0.3rem">
+          Pode digitar um valor parcial ou o valor total do pagamento.
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observação (opcional)</label>
+        <input type="text" name="obs" placeholder="Ex: erro de lançamento">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalDesfazer').classList.remove('active')">Cancelar</button>
+        <button type="submit" class="btn btn-danger"
+          onclick="return confirm('Confirmar remoção de R$ ' + document.getElementById('desfazerValor').value + '?')">
+          ↩ Remover
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 <script>
+
+function abrirDesfazer(pagId, valorOriginal) {
+  const v = Math.abs(parseFloat(valorOriginal) || 0);
+  document.getElementById('desfazerInfo').textContent = 'Pagamento de R$ ' + v.toFixed(2);
+  document.getElementById('desfazerValor').value = v.toFixed(2);
+  document.getElementById('formDesfazer').action = '/desfazer/' + pagId;
+  document.getElementById('modalDesfazer').classList.add('active');
+}
+
 function abrirRenovar() {
   document.getElementById('renovarData').value = new Date().toISOString().split('T')[0];
   document.getElementById('modalRenovar').classList.add('active');
