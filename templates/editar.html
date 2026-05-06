@@ -3,24 +3,32 @@
 {% block content %}
 <div class="container">
   <div class="page-header">
-    <div class="page-header-left"><h1>Editar Cliente</h1><p>{{ c.nome }}</p></div>
+    <div class="page-header-left">
+      <h1>Editar Cliente</h1>
+      <p>
+        {{ c.nome }}
+        <span class="badge" style="margin-left:0.4rem;background:rgba(110,159,255,0.12);color:var(--accent2);font-size:0.65rem">
+          {{ '📅 Diária' if c.tipo_cobranca == 'diaria' else '📆 Mensalidade' }}
+        </span>
+      </p>
+    </div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-      {% if c.status == 'aguardando' %}
-      <button class="btn btn-success" onclick="abrirRenovar()">↻ Renovar Contrato</button>
+      {% if c.status == 'aguardando' and c.tipo_cobranca == 'diaria' %}
+      <button class="btn btn-success" onclick="abrirRenovar()">↻ Renovar</button>
       {% endif %}
-      <button class="btn btn-secondary" onclick="copiarLink()" title="Copiar link do cliente">🔗 Link</button>
+      <button class="btn btn-secondary" onclick="copiarLink()">🔗 Link</button>
       {% if role == 'owner' %}
       <form method="post" action="/apagar/{{ c.id }}" onsubmit="return confirm('Apagar {{ c.nome }} permanentemente?')">
         <button type="submit" class="btn btn-danger">✕ Apagar Cliente</button>
       </form>
       <form method="post" action="/gerar_link/{{ c.id }}" onsubmit="return confirm('Gerar novo link? O link antigo para de funcionar.')">
-        <button type="submit" class="btn btn-secondary" title="Gerar novo link">↺ Novo link</button>
+        <button type="submit" class="btn btn-secondary">↺ Novo link</button>
       </form>
       {% endif %}
     </div>
   </div>
 
-  <div class="form-card" style="margin-bottom:2rem">
+  <div class="form-card" style="margin-bottom:1.5rem">
     <form method="post" action="/editar/{{ c.id }}" enctype="multipart/form-data">
 
       <!-- Foto -->
@@ -37,14 +45,15 @@
       <!-- Dados Pessoais -->
       <div class="divider-label">Dados Pessoais</div>
       <div class="form-group"><label>Nome completo</label><input type="text" name="nome" value="{{ c.nome }}" required></div>
-      <div class="form-group"><label>WhatsApp</label><input type="tel" name="whatsapp" value="{{ c.whatsapp or '' }}" placeholder="(00) 00000-0000"></div>
+      <div class="form-group"><label>WhatsApp</label><input type="tel" name="whatsapp" value="{{ c.whatsapp or '' }}" placeholder="(00) 00000-0000" id="waInput"></div>
       <div class="form-row">
-        <div class="form-group"><label>CPF</label><input type="text" name="cpf" value="{{ c.cpf or '' }}" placeholder="000.000.000-00" maxlength="14"></div>
+        <div class="form-group"><label>CPF</label><input type="text" name="cpf" value="{{ c.cpf or '' }}" placeholder="000.000.000-00" maxlength="14" id="cpfInput"></div>
         <div class="form-group"><label>Limite (R$)</label><input type="number" name="limite" step="0.01" min="0" value="{{ c.limite or 0 }}"></div>
       </div>
       <div class="form-group"><label>Endereço</label><input type="text" name="endereco" value="{{ c.endereco or '' }}" placeholder="Rua, número, bairro, cidade"></div>
       <div class="form-group"><label>Email</label><input type="email" name="email" value="{{ c.email or '' }}" placeholder="email@exemplo.com"></div>
-      <div class="form-group"><label>Chave Pix</label><input type="text" name="chave_pix" value="{{ c.chave_pix or '' }}"></div>
+      <div class="form-group"><label>Chave PIX</label><input type="text" name="chave_pix" value="{{ c.chave_pix or '' }}"></div>
+      <div class="form-group"><label>Observações do contrato</label><input type="text" name="obs_contrato" value="{{ c.obs_contrato or '' }}" placeholder="Ex: garantia, referência..."></div>
 
       <!-- Arquivo -->
       <div class="divider-label">Arquivo / Documento</div>
@@ -59,36 +68,138 @@
         <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);margin-top:0.4rem">Deixe em branco para manter o arquivo atual.</div>
       </div>
 
-      <!-- Contrato -->
-      <div class="divider-label">Contrato Atual</div>
+      <!-- ══ CONTRATO DIÁRIA ══ -->
+      {% if c.tipo_cobranca == 'diaria' %}
+      <div class="divider-label">📅 Contrato — Diária</div>
       <div class="form-row">
-        <div class="form-group"><label>Valor da diária (R$)</label><input type="number" name="valor_diaria" step="0.01" value="{{ c.valor_diaria }}" required></div>
-        <div class="form-group"><label>Data de início</label><input type="date" name="data_inicio" value="{{ c.data_inicio }}"></div>
+        <div class="form-group">
+          <label>Valor da diária (R$)</label>
+          <input type="number" name="valor_diaria" step="0.01" min="0.01" value="{{ c.valor_diaria }}" required>
+        </div>
+        <div class="form-group">
+          <label>Total de diárias</label>
+          <input type="number" name="total_diarias" min="1" value="{{ c.total_diarias or 20 }}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data de início</label>
+          <input type="date" name="data_inicio" value="{{ c.data_inicio }}">
+        </div>
+        <div class="form-group">
+          <label>Juros por atraso (%/dia)</label>
+          <input type="number" name="juros_atraso" step="0.01" min="0" value="{{ c.juros_atraso or 0 }}" placeholder="Ex: 1 = 1%/dia">
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-bottom:0.75rem;padding:0.6rem;background:rgba(0,0,0,0.15);border-radius:6px">
+        Progresso: <strong style="color:var(--accent)">{{ c.diarias_pagas }}/{{ c.total_diarias or 20 }} diárias pagas</strong>
+        {% if c.saldo_pendente > 0 %} · Saldo: <strong style="color:var(--warn)">R$ {{ '%.2f'|format(c.saldo_pendente) }}</strong>{% endif %}
+        {% if c.dias_em_atraso > 0 %} · <strong style="color:var(--danger)">{{ c.dias_em_atraso }} dia(s) em atraso</strong>{% endif %}
       </div>
 
-      <div style="display:flex;gap:0.7rem;margin-top:0.5rem">
+      <!-- ══ CONTRATO MENSALIDADE ══ -->
+      {% else %}
+      <div class="divider-label">📆 Contrato — Mensalidade</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor da mensalidade (R$)</label>
+          <input type="number" name="valor_mensalidade" step="0.01" min="0.01" value="{{ c.valor_mensalidade }}" required>
+        </div>
+        <div class="form-group">
+          <label>Dia de vencimento (1-28)</label>
+          <input type="number" name="dia_vencimento" min="1" max="28" value="{{ c.dia_vencimento or 10 }}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Juros por atraso (%/dia)</label>
+          <input type="number" name="juros_atraso" step="0.01" min="0" value="{{ c.juros_atraso or 0 }}" placeholder="Ex: 1 = 1%/dia">
+          <div style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);margin-top:0.3rem">
+            0 = sem juros · aplicado sobre o valor em atraso
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Cobrança recorrente</label>
+          <select name="cobranca_recorrente">
+            <option value="sim" {{ 'selected' if c.cobranca_recorrente }}>Sim — todo mês automaticamente</option>
+            <option value="nao" {{ 'selected' if not c.cobranca_recorrente }}>Não — gerencio manualmente</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-bottom:0.75rem;padding:0.6rem;background:rgba(0,0,0,0.15);border-radius:6px">
+        Mensalidade: <strong style="color:var(--accent)">R$ {{ '%.2f'|format(c.valor_mensalidade) }}/mês</strong>
+        · Vence todo dia <strong>{{ c.dia_vencimento }}</strong>
+        · Total pago: <strong style="color:var(--accent)">R$ {{ '%.2f'|format(c.total_pago) }}</strong>
+        {% if c.dias_em_atraso > 0 %}
+        · <strong style="color:var(--danger)">{{ c.dias_em_atraso }} dia(s) em atraso — R$ {{ '%.2f'|format(c.valor_em_atraso) }}</strong>
+        {% if c.juros_atraso > 0 %} ({{ c.juros_atraso }}%/dia){% endif %}
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div style="display:flex;gap:0.7rem;margin-top:0.75rem">
         <button type="submit" class="btn btn-primary">Salvar Alterações</button>
         <a href="/dashboard" class="btn btn-secondary">Cancelar</a>
       </div>
     </form>
   </div>
 
-  <!-- Pagamentos -->
-  <div class="form-card" style="margin-bottom:2rem">
+  <!-- Parcelas (apenas mensalidade) -->
+  {% if c.tipo_cobranca == 'mensalidade' and parcelas %}
+  <div class="form-card" style="margin-bottom:1.5rem">
     <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">
-      Pagamentos do Contrato Atual
-      <span style="color:var(--accent);margin-left:0.5rem">{{ c.diarias_pagas }}/20 diárias</span>
+      📆 Parcelas Mensais
+    </h3>
+    <div class="hist-list">
+      {% for p in parcelas %}
+      <div class="hist-item">
+        <div>
+          <div class="nome-col" style="font-size:0.88rem">{{ p.competencia }}</div>
+          <div class="hist-date">
+            Vence: {{ p.vencimento }} ·
+            <span style="color:{{ 'var(--accent)' if p.status == 'paga' else ('var(--warn)' if p.status == 'parcial' else 'var(--danger)') }}">
+              {{ p.status }}
+            </span>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="hist-val">R$ {{ '%.2f'|format(p.valor_pago) }} / {{ '%.2f'|format(p.valor) }}</div>
+          {% if p.pendente > 0 %}
+          <div style="font-size:0.7rem;color:var(--danger)">Pendente: R$ {{ '%.2f'|format(p.pendente) }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Histórico de pagamentos -->
+  <div class="form-card" style="margin-bottom:1.5rem">
+    <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">
+      Histórico de Pagamentos
+      {% if c.tipo_cobranca == 'diaria' %}
+      <span style="color:var(--accent);margin-left:0.5rem">{{ c.diarias_pagas }}/{{ c.total_diarias or 20 }} diárias</span>
+      {% else %}
+      <span style="color:var(--accent);margin-left:0.5rem">R$ {{ '%.2f'|format(c.total_pago) }} total</span>
+      {% endif %}
     </h3>
     {% if pags %}
     <div class="hist-list">
       {% for p in pags %}
       <div class="hist-item">
         <div>
-          <div class="nome-col" style="font-size:0.88rem">{{ p.data|replace('-','/')|truncate(10,true,'') }}{% if p.criado_em %} <span style="color:var(--muted);font-size:0.78rem">· {{ p.criado_em.strftime('%H:%M') }}</span>{% endif %}</div>
-          <div class="hist-date">{{ p.diarias }} diária(s){% if p.obs %} · {{ p.obs }}{% endif %}</div>
+          <div class="nome-col" style="font-size:0.88rem">
+            {{ p.data|replace('-','/')|truncate(10,true,'') }}
+            {% if p.criado_em %}<span style="color:var(--muted);font-size:0.78rem">· {{ p.criado_em.strftime('%H:%M') }}</span>{% endif %}
+          </div>
+          <div class="hist-date">
+            {% if c.tipo_cobranca == 'diaria' and p.diarias %}{{ p.diarias }} diária(s){% endif %}
+            {% if p.obs %} · {{ p.obs }}{% endif %}
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:0.75rem">
-          <span class="hist-val">R$ {{ "%.2f"|format(p.valor) }}</span>
+          <span class="hist-val" style="{{ 'color:var(--danger)' if p.valor < 0 else '' }}">R$ {{ '%.2f'|format(p.valor) }}</span>
           {% if role == 'owner' or role == 'funcionario' %}
           <form method="post" action="/desfazer/{{ p.id }}" onsubmit="return confirm('Desfazer este pagamento?')">
             <button type="submit" class="btn btn-danger btn-sm" title="Desfazer">↩</button>
@@ -99,16 +210,16 @@
       {% endfor %}
     </div>
     <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-family:var(--mono);font-size:0.85rem">
-      <span style="color:var(--muted)">Total pago neste contrato</span>
-      <span style="color:var(--accent);font-weight:500">R$ {{ "%.2f"|format(c.total_pago) }}</span>
+      <span style="color:var(--muted)">Total pago</span>
+      <span style="color:var(--accent);font-weight:500">R$ {{ '%.2f'|format(c.total_pago) }}</span>
     </div>
     {% else %}
-    <p style="color:var(--muted);font-family:var(--mono);font-size:0.82rem">Nenhum pagamento registrado neste contrato.</p>
+    <p style="color:var(--muted);font-family:var(--mono);font-size:0.82rem">Nenhum pagamento registrado ainda.</p>
     {% endif %}
   </div>
 
-  <!-- Histórico de contratos anteriores -->
-  {% if hist %}
+  <!-- Histórico de contratos (apenas diária) -->
+  {% if c.tipo_cobranca == 'diaria' and hist %}
   <div class="form-card">
     <h3 style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem">Contratos Anteriores</h3>
     <div class="hist-list">
@@ -116,21 +227,23 @@
       <div class="hist-item">
         <div>
           <div class="nome-col" style="font-size:0.88rem">{{ h.data_inicio }} → {{ h.data_fim }}</div>
-          <div class="hist-date">R$ {{ "%.2f"|format(h.valor_diaria) }} / diária</div>
+          <div class="hist-date">R$ {{ '%.2f'|format(h.valor_diaria) }} / diária</div>
         </div>
-        <span class="hist-val">R$ {{ "%.2f"|format(h.total_pago) }}</span>
+        <span class="hist-val">R$ {{ '%.2f'|format(h.total_pago) }}</span>
       </div>
       {% endfor %}
     </div>
   </div>
   {% endif %}
+
 </div>
 
-<!-- Modal Renovar -->
+<!-- Modal Renovar (só diária) -->
+{% if c.tipo_cobranca == 'diaria' %}
 <div class="modal-overlay" id="modalRenovar" onclick="if(event.target===this)this.classList.remove('active')">
   <div class="modal">
     <h3>Renovar Contrato</h3>
-    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1.2rem">{{ c.nome }} · Novo ciclo de 20 diárias</p>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1.2rem">{{ c.nome }} · Novo ciclo de diárias</p>
     <form method="post" action="/renovar/{{ c.id }}">
       <div class="form-group">
         <label>Novo valor de diária (R$)</label>
@@ -148,6 +261,8 @@
     </form>
   </div>
 </div>
+{% endif %}
+
 <script>
 function abrirRenovar() {
   document.getElementById('renovarData').value = new Date().toISOString().split('T')[0];
@@ -155,35 +270,27 @@ function abrirRenovar() {
 }
 function previewFoto(input) {
   if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = e => document.getElementById('fotoPreview').src = e.target.result;
-    reader.readAsDataURL(input.files[0]);
+    const r = new FileReader();
+    r.onload = e => document.getElementById('fotoPreview').src = e.target.result;
+    r.readAsDataURL(input.files[0]);
   }
 }
-// Máscara CPF
-const cpfInput = document.querySelector('[name="cpf"]');
+const cpfInput = document.getElementById('cpfInput');
 if (cpfInput) cpfInput.addEventListener('input', function() {
   let v = this.value.replace(/\D/g,'');
-  v = v.replace(/(\d{3})(\d)/,'$1.$2');
-  v = v.replace(/(\d{3})(\d)/,'$1.$2');
-  v = v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  v = v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
   this.value = v;
 });
-// Máscara WhatsApp
-const waInput = document.querySelector('[name="whatsapp"]');
+const waInput = document.getElementById('waInput');
 if (waInput) waInput.addEventListener('input', function() {
   let v = this.value.replace(/\D/g,'');
-  v = v.replace(/^(\d{2})(\d)/,'($1) $2');
-  v = v.replace(/(\d{5})(\d)/,'$1-$2');
+  v = v.replace(/^(\d{2})(\d)/,'($1) $2').replace(/(\d{5})(\d)/,'$1-$2');
   this.value = v;
 });
 function copiarLink() {
   const link = window.location.origin + '/c/{{ c.token_link }}';
-  navigator.clipboard.writeText(link).then(() => {
-    alert('Link copiado:\n' + link);
-  }).catch(() => {
-    prompt('Copie o link abaixo:', link);
-  });
+  navigator.clipboard.writeText(link).then(() => alert('Link copiado:\n' + link))
+    .catch(() => prompt('Copie o link abaixo:', link));
 }
 </script>
 {% endblock %}
