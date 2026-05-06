@@ -340,13 +340,54 @@ def pagar_mensalidade(id):
 @app.route('/estornar/<int:id>', methods=['POST'])
 @login_required
 def estornar(id):
-    c=Cliente.query.get_or_404(id); qtd=int(request.form.get('diarias',1)); obs=request.form.get('obs','').strip()
-    qtd=max(1,min(qtd,c.diarias_pagas)); c.diarias_pagas=max(0,c.diarias_pagas-qtd); c.saldo_pendente=0.0
-    valor_estorno=round(qtd*c.valor_diaria,2)
-    p=Pagamento(cliente_id=id,data=today(),valor=-valor_estorno,diarias=-qtd,obs=f'[ESTORNO] {obs}' if obs else '[ESTORNO]')
-    db.session.add(p); db.session.commit()
-    flash(f'−{qtd} diária(s) estornada(s) de {c.nome}.','warn')
+    c=Cliente.query.get_or_404(id)
+    valor=float(request.form.get('valor',0)); obs=request.form.get('obs','').strip()
+    if valor<=0: flash('Valor inválido para remoção.','error'); return redirect(url_for('dashboard'))
+
+    if c.tipo_cobranca=='diaria':
+        # Calcula quantas diárias o valor representa
+        qtd=int(valor//c.valor_diaria) if c.valor_diaria else 0
+        qtd=max(1,min(qtd,c.diarias_pagas))
+        c.diarias_pagas=max(0,c.diarias_pagas-qtd)
+        c.saldo_pendente=max(0.0,c.saldo_pendente-(valor-qtd*c.valor_diaria))
+        p=Pagamento(cliente_id=id,data=today(),valor=-valor,diarias=-qtd,obs=f'[ESTORNO] {obs}' if obs else '[ESTORNO]')
+        db.session.add(p); db.session.commit()
+        flash(f'−R$ {valor:.2f} removido de {c.nome} (−{qtd} diária(s)).','warn')
+    else:
+        # Mensalidade — reverte valor da parcela do mês
+        parcela=c._parcela_mes_atual()
+        if parcela:
+            parcela.valor_pago=max(0,round(parcela.valor_pago-valor,2))
+            parcela.status='aberta' if parcela.valor_pago==0 else 'parcial'
+        p=Pagamento(cliente_id=id,parcela_id=parcela.id if parcela else None,
+                    data=today(),valor=-valor,obs=f'[ESTORNO] {obs}' if obs else '[ESTORNO]')
+        db.session.add(p); db.session.commit()
+        flash(f'−R$ {valor:.2f} removido da mensalidade de {c.nome}.','warn')
     return redirect(url_for('dashboard'))
+
+# ── Desfazer pagamento individual (botão ↩ no editar) ────────────
+@app.route('/desfazer/<int:pag_id>', methods=['POST'])
+@login_required
+def desfazer(pag_id):
+    p = Pagamento.query.get_or_404(pag_id)
+    c = p.cliente
+    valor_abs = abs(p.valor)
+
+    if c.tipo_cobranca == 'diaria':
+        diarias_abs = abs(p.diarias or 0)
+        c.diarias_pagas = max(0, c.diarias_pagas - diarias_abs)
+        c.saldo_pendente = max(0.0, c.saldo_pendente - (valor_abs - diarias_abs * c.valor_diaria))
+    else:
+        if p.parcela_id:
+            parc = Parcela.query.get(p.parcela_id)
+            if parc:
+                parc.valor_pago = max(0, round(parc.valor_pago - valor_abs, 2))
+                parc.status = 'aberta' if parc.valor_pago == 0 else 'parcial'
+
+    db.session.delete(p)
+    db.session.commit()
+    flash(f'Pagamento de R$ {valor_abs:.2f} removido de {c.nome}.', 'warn')
+    return redirect(url_for('editar', id=c.id))
 
 # ── Renovar DIÁRIA ─────────────────────────────────────────────
 @app.route('/renovar/<int:id>', methods=['POST'])
