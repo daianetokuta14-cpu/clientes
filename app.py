@@ -196,10 +196,33 @@ def dashboard():
     ativos_d   = [c for c in diarias if c.diarias_pagas < c.total_diarias]
     aguardando = [c for c in diarias if c.diarias_pagas >= c.total_diarias]
     em_atraso  = [c for c in clientes if c.dias_em_atraso > 0]
+
+    # ── Projeção financeira (só owner) ──────────────────────────
+    # Já recebido — todos os pagamentos positivos de todos os tempos
+    ja_recebido = sum(
+        p.valor for p in Pagamento.query.all() if p.valor > 0
+    )
+    # A receber — diárias: (total_diarias - diarias_pagas) * valor_diaria
+    # A receber — mensalidade: parcela pendente do mês atual
+    a_receber = 0.0
+    for c in clientes:
+        if c.tipo_cobranca == 'diaria':
+            restantes = max(0, c.total_diarias - c.diarias_pagas)
+            a_receber += restantes * c.valor_diaria
+            if c.saldo_pendente > 0:
+                a_receber -= c.saldo_pendente  # saldo já pago conta
+        else:
+            parcela = c._parcela_mes_atual()
+            if parcela:
+                a_receber += parcela.pendente
+    a_receber = max(0, round(a_receber, 2))
+    total_projetado = round(ja_recebido + a_receber, 2)
+
     return render_template('dashboard.html',
         clientes=clientes, ativos=len(ativos_d), aguardando=len(aguardando),
         em_atraso=len(em_atraso), total_hoje=total_hoje, total_mes=total_mes,
-        qtd_mensais=len(mensais), role=session['role'], hoje=today()
+        qtd_mensais=len(mensais), role=session['role'], hoje=today(),
+        ja_recebido=round(ja_recebido, 2), a_receber=a_receber, total_projetado=total_projetado
     )
 
 @app.route('/clientes')
