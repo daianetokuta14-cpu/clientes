@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Acesso Pausado — Mega Credito{% endblock %}
+{% block extra_css %}
+<style>
+.pausado-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1.5rem}
+.pausado-card{background:var(--surface);border:1px solid rgba(255,110,110,0.35);border-radius:14px;padding:2.5rem;width:100%;max-width:420px;text-align:center}
+.pausado-icon{font-size:3.5rem;margin-bottom:1rem;line-height:1}
+.pausado-title{font-size:1.4rem;font-weight:800;color:var(--danger);margin-bottom:0.75rem}
+.pausado-text{color:var(--muted);font-size:0.9rem;line-height:1.6;margin-bottom:2rem}
+.wpp-btn{display:inline-flex;align-items:center;justify-content:center;gap:0.6rem;background:#25D366;color:#fff;font-weight:700;font-size:1rem;padding:0.9rem 1.75rem;border-radius:10px;text-decoration:none;border:none;cursor:pointer;width:100%;font-family:var(--sans);transition:background 0.2s}
+.wpp-btn:hover{background:#1ebe5d}
+.wpp-icon{font-size:1.3rem}
+.back-link{display:block;margin-top:1.25rem;color:var(--muted);font-size:0.8rem;font-family:var(--mono);text-decoration:none}
+.back-link:hover{color:var(--text)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="pausado-wrap">
+  <div class="pausado-card">
+    <div class="pausado-icon">🔒</div>
+    <div class="pausado-title">Acesso Pausado</div>
+    <div class="pausado-text">
+      Seu acesso ao sistema está temporariamente pausado.<br>
+      Para reativar, entre em contato com o suporte pelo WhatsApp.
+    </div>
+
+    {% if wpp %}
+    <a class="wpp-btn"
+       href="https://wa.me/{{ wpp | replace(' ','') | replace('-','') | replace('(','') | replace(')','') | replace('+','') }}?text=Olá!%20Preciso%20reativar%20meu%20acesso%20ao%20Mega%20Credito."
+       target="_blank" rel="noopener">
+      <span class="wpp-icon">💬</span>
+      Falar no WhatsApp
+    </a>
+    {% endif %}
+
+    <a href="/acesso" class="back-link">← Voltar ao login</a>
+  </div>
+</div>
+{% endblock %}

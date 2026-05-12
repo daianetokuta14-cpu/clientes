@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Mega Credito</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0f;--surface:#111118;--surface2:#1a1a24;--border:#2a2a3a;--accent:#7fff6e;--accent2:#6e9fff;--warn:#ffb86e;--danger:#ff6e6e;--text:#e8e8f0;--muted:#6b6b80;--mono:'DM Mono',monospace;--sans:'Syne',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding:1.5rem}
+h1{font-size:1.6rem;font-weight:800;color:var(--accent);margin-bottom:0.3rem}
+.sub{color:var(--muted);font-size:0.82rem;font-family:var(--mono);margin-bottom:2rem}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+.section h2{font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--text)}
+.form-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.75rem;align-items:end}
+input,select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.65rem 0.85rem;border-radius:8px;font-family:var(--mono);font-size:0.88rem;width:100%}
+input:focus{outline:none;border-color:var(--accent)}
+label{font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:0.35rem}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:0.6rem 1rem;border:none;border-radius:8px;font-family:var(--mono);font-size:0.82rem;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.2s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#0a0a0f}
+.btn-warn{background:rgba(255,184,110,0.15);color:var(--warn);border:1px solid rgba(255,184,110,0.3)}
+.btn-success{background:rgba(127,255,110,0.12);color:var(--accent);border:1px solid rgba(127,255,110,0.3)}
+.btn-danger{background:rgba(255,110,110,0.15);color:var(--danger);border:1px solid rgba(255,110,110,0.3)}
+.btn-sm{padding:0.35rem 0.7rem;font-size:0.75rem}
+.tenant-list{display:flex;flex-direction:column;gap:0.75rem}
+.tenant-row{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center}
+.tenant-row.pausado{border-color:rgba(255,110,110,0.4);background:rgba(255,110,110,0.04)}
+.tenant-info .nome{font-weight:700;font-size:1rem;margin-bottom:0.2rem}
+.tenant-info .email{color:var(--muted);font-family:var(--mono);font-size:0.78rem}
+.tenant-info .meta{color:var(--muted);font-family:var(--mono);font-size:0.72rem;margin-top:0.3rem}
+.badge{display:inline-block;padding:0.2rem 0.5rem;border-radius:4px;font-family:var(--mono);font-size:0.65rem;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;margin-left:0.5rem}
+.badge-ativo{background:rgba(127,255,110,0.1);color:var(--accent)}
+.badge-pausado{background:rgba(255,110,110,0.1);color:var(--danger)}
+.actions{display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center}
+.flash{padding:0.6rem 1rem;border-radius:6px;margin-bottom:1rem;font-size:0.82rem;font-family:var(--mono)}
+.flash.success{background:rgba(127,255,110,0.1);border:1px solid rgba(127,255,110,0.3);color:var(--accent)}
+.flash.warn{background:rgba(255,184,110,0.1);border:1px solid rgba(255,184,110,0.3);color:var(--warn)}
+.flash.error{background:rgba(255,110,110,0.1);border:1px solid rgba(255,110,110,0.3);color:var(--danger)}
+.senha-inline{display:inline-flex;gap:0.3rem;align-items:center}
+.senha-inline input{width:120px;padding:0.35rem 0.5rem;font-size:0.75rem}
+details summary{cursor:pointer;color:var(--muted);font-size:0.75rem;font-family:var(--mono);list-style:none;margin-top:0.4rem}
+details summary::before{content:'▶ '}
+details[open] summary::before{content:'▼ '}
+details[open]{margin-top:0.3rem}
+.inline-form{display:inline}
+</style>
+</head>
+<body>
+
+<h1>⚙️ Painel Admin</h1>
+<div class="sub">Mega Credito SaaS — gerenciamento de tenants</div>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}
+{% if msgs %}
+{% for cat, msg in msgs %}
+<div class="flash {{ cat }}">{{ msg }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- Criar novo tenant -->
+<div class="section">
+  <h2>➕ Criar novo tenant</h2>
+  <form method="post" action="/admin/criar?key={{ key }}">
+    <input type="hidden" name="key" value="{{ key }}">
+    <div class="form-row">
+      <div>
+        <label>Nome / empresa</label>
+        <input type="text" name="nome" placeholder="Ex: João Silva" required>
+      </div>
+      <div>
+        <label>E-mail de acesso</label>
+        <input type="email" name="email" placeholder="joao@email.com" required>
+      </div>
+      <div>
+        <label>Senha inicial</label>
+        <input type="text" name="senha" placeholder="senha123" required>
+      </div>
+      <div>
+        <label>WhatsApp suporte</label>
+        <input type="text" name="wpp" placeholder="5511999999999">
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button type="submit" class="btn btn-primary" style="width:100%;height:42px">Criar</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Lista de tenants -->
+<div class="section">
+  <h2>👥 Tenants cadastrados ({{ tenants|length }})</h2>
+  {% if not tenants %}
+  <p style="color:var(--muted);font-family:var(--mono);font-size:0.85rem">Nenhum tenant ainda.</p>
+  {% else %}
+  <div class="tenant-list">
+    {% for t in tenants %}
+    <div class="tenant-row {% if t.status == 'pausado' %}pausado{% endif %}">
+      <div class="tenant-info">
+        <div class="nome">
+          {{ t.nome }}
+          <span class="badge badge-{{ t.status }}">{{ t.status }}</span>
+        </div>
+        <div class="email">{{ t.email }}</div>
+        <div class="meta">
+          {{ stats.get(t.id, 0) }} clientes ativos •
+          criado em {{ t.criado_em.strftime('%d/%m/%Y') if t.criado_em else '—' }} •
+          wpp: {{ t.wpp_suporte or '—' }}
+        </div>
+        <details>
+          <summary>Alterar senha</summary>
+          <form method="post" action="/admin/senha/{{ t.id }}?key={{ key }}" class="senha-inline" style="margin-top:0.4rem;display:flex;gap:0.3rem">
+            <input type="hidden" name="key" value="{{ key }}">
+            <input type="text" name="nova_senha" placeholder="nova senha">
+            <button type="submit" class="btn btn-sm btn-success">Salvar</button>
+          </form>
+        </details>
+      </div>
+      <div class="actions">
+        {% if t.status == 'ativo' %}
+        <form method="post" action="/admin/pausar/{{ t.id }}?key={{ key }}" class="inline-form">
+          <input type="hidden" name="key" value="{{ key }}">
+          <button type="submit" class="btn btn-sm btn-warn"
+            onclick="return confirm('Pausar {{ t.nome }}?')">⏸ Pausar</button>
+        </form>
+        {% else %}
+        <form method="post" action="/admin/ativar/{{ t.id }}?key={{ key }}" class="inline-form">
+          <input type="hidden" name="key" value="{{ key }}">
+          <button type="submit" class="btn btn-sm btn-success">▶ Reativar</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/admin/deletar/{{ t.id }}?key={{ key }}" class="inline-form">
+          <input type="hidden" name="key" value="{{ key }}">
+          <button type="submit" class="btn btn-sm btn-danger"
+            onclick="return confirm('DELETAR {{ t.nome }} e TODOS os dados? Esta ação é irreversível!')">🗑 Deletar</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+</body>
+</html>
