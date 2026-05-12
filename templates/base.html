@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>{% block title %}Mega Credito{% endblock %}</title>
+<!-- PWA -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mega Credito">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0a0f;--surface:#111118;--surface2:#1a1a24;--border:#2a2a3a;--accent:#7fff6e;--accent2:#6e9fff;--warn:#ffb86e;--danger:#ff6e6e;--text:#e8e8f0;--muted:#6b6b80;--mono:'DM Mono',monospace;--sans:'Syne',sans-serif}
@@ -98,6 +106,9 @@ h2{font-size:1.1rem;font-weight:700;margin-bottom:0.75rem}
 {% if session.get('role') %}
 <nav>
   <a href="/dashboard" class="nav-brand">Mega<span> Credito</span></a>
+  {% if session.get('tenant_nome') %}
+  <span style="color:var(--muted);font-size:0.75rem;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">{{ session.tenant_nome }}</span>
+  {% endif %}
   <div class="nav-right">
     <span class="role-badge {{ session.role }}">{{ session.role }}</span>
     <a href="/logout" style="color:var(--danger);font-size:0.75rem">Sair</a>
@@ -133,5 +144,10 @@ h2{font-size:1.1rem;font-weight:700;margin-bottom:0.75rem}
   </a>
 </nav>
 {% endif %}
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(function(){});
+}
+</script>
 </body>
 </html>
