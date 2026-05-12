@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import date, datetime, timezone, timedelta
 import secrets
 
@@ -19,8 +20,31 @@ def contar_dias_uteis_sem_domingo(inicio, fim):
     return total
 
 
+# ══════════════════════════════════════════════════════════════
+# TENANT — cada cliente que compra o SaaS
+# ══════════════════════════════════════════════════════════════
+class Tenant(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    nome         = db.Column(db.String(100), nullable=False)
+    email        = db.Column(db.String(150), unique=True, nullable=False)
+    senha_hash   = db.Column(db.String(256), nullable=False)
+    status       = db.Column(db.String(20), default='ativo')   # 'ativo' | 'pausado'
+    wpp_suporte  = db.Column(db.String(30), default='')        # número WPP do suporte (seu)
+    criado_em    = db.Column(db.DateTime, default=_now)
+
+    def set_senha(self, senha):
+        self.senha_hash = generate_password_hash(senha)
+
+    def verificar_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+
+
+# ══════════════════════════════════════════════════════════════
+# CLIENTE — devedores cadastrados por cada tenant
+# ══════════════════════════════════════════════════════════════
 class Cliente(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
     nome            = db.Column(db.String(100), nullable=False)
     whatsapp        = db.Column(db.String(20))
     cpf             = db.Column(db.String(20))
@@ -33,9 +57,6 @@ class Cliente(db.Model):
     token_link      = db.Column(db.String(48), unique=True, default=lambda: secrets.token_urlsafe(32))
     criado_em       = db.Column(db.DateTime, default=_now)
 
-    # ── Tipo de cobrança ──
-    # 'diaria' = cobra por dia útil (sem domingo)
-    # 'mensalidade' = cobra todo mês numa data fixa
     tipo_cobranca   = db.Column(db.String(20), nullable=False, default='diaria')
 
     # ── Campos DIÁRIA ──
@@ -47,13 +68,10 @@ class Cliente(db.Model):
 
     # ── Campos MENSALIDADE ──
     valor_mensalidade   = db.Column(db.Float, default=0.0)
-    dia_vencimento      = db.Column(db.Integer, default=10)   # dia do mês 1-28
+    dia_vencimento      = db.Column(db.Integer, default=10)
     cobranca_recorrente = db.Column(db.Boolean, default=True)
 
-    # ── Juros por atraso (ambos) ──
-    juros_atraso    = db.Column(db.Float, default=0.0)  # % ao dia ex: 1.0 = 1%
-
-    # ── Status geral ──
+    juros_atraso    = db.Column(db.Float, default=0.0)
     ativo           = db.Column(db.Boolean, default=True)
     obs_contrato    = db.Column(db.Text, default='')
 
@@ -61,7 +79,6 @@ class Cliente(db.Model):
     contratos   = db.relationship('ContratoHistorico', backref='cliente', lazy=True, cascade='all, delete-orphan')
     parcelas    = db.relationship('Parcela', backref='cliente', lazy=True, cascade='all, delete-orphan')
 
-    # ── Properties DIÁRIA ──
     @property
     def dias_desde_inicio(self):
         try:
@@ -144,6 +161,7 @@ class Cliente(db.Model):
 
 class Pagamento(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
     cliente_id   = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
     parcela_id   = db.Column(db.Integer, db.ForeignKey('parcela.id'), nullable=True)
     data         = db.Column(db.String(10), default=lambda: date.today().isoformat())
@@ -156,14 +174,14 @@ class Pagamento(db.Model):
 
 
 class Parcela(db.Model):
-    """Uma parcela mensal por cliente mensalidade"""
     id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
     cliente_id  = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
-    competencia = db.Column(db.String(7))    # ex: "2026-05"
-    vencimento  = db.Column(db.String(10))   # ex: "2026-05-10"
+    competencia = db.Column(db.String(7))
+    vencimento  = db.Column(db.String(10))
     valor       = db.Column(db.Float, nullable=False)
     valor_pago  = db.Column(db.Float, default=0.0)
-    status      = db.Column(db.String(20), default='aberta')  # aberta, paga, parcial, atrasada
+    status      = db.Column(db.String(20), default='aberta')
     criado_em   = db.Column(db.DateTime, default=_now)
     pagamentos  = db.relationship('Pagamento', backref='parcela', lazy=True)
 
@@ -174,6 +192,7 @@ class Parcela(db.Model):
 
 class ContratoHistorico(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
     cliente_id   = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
     data_inicio  = db.Column(db.String(10))
     data_fim     = db.Column(db.String(10))
