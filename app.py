@@ -53,6 +53,33 @@ def check_rate_limit(ip):
 def reset_rate_limit(ip):
     _login_attempts.pop(ip, None)
 
+# ── Anti-duplicação ────────────────────────────────────────────
+_ultimos_pagamentos = {}   # chave: (tenant_id, cliente_id, valor) → timestamp
+_ultimos_cadastros  = {}   # chave: (tenant_id, nome_lower) → timestamp
+JANELA_PAG  = 5    # segundos
+JANELA_CAD  = 10   # segundos
+
+def check_dup_pagamento(tenant_id, cliente_id, valor):
+    """Retorna True se este pagamento é duplicata (mesmo tenant+cliente+valor nos últimos 5s)."""
+    chave = (tenant_id, cliente_id, round(float(valor), 2))
+    agora = time.time()
+    ultimo = _ultimos_pagamentos.get(chave)
+    if ultimo and agora - ultimo < JANELA_PAG:
+        return True
+    _ultimos_pagamentos[chave] = agora
+    return False
+
+def check_dup_cadastro(tenant_id, nome):
+    """Retorna True se este cadastro é duplicata (mesmo tenant+nome nos últimos 10s)."""
+    chave = (tenant_id, nome.strip().lower())
+    agora = time.time()
+    ultimo = _ultimos_cadastros.get(chave)
+    if ultimo and agora - ultimo < JANELA_CAD:
+        return True
+    _ultimos_cadastros[chave] = agora
+    return False
+
+
 db.init_app(app)
 
 with app.app_context():
@@ -287,7 +314,7 @@ def dashboard():
             gerar_parcela_mes(c)
 
     pags_hoje  = Pagamento.query.filter_by(tenant_id=tid(), data=today()).all()
-    total_hoje = sum(p.valor for p in pags_hoje if p.valor > 0)
+    total_hoje = sum(p.valor for p in pags_hoje)  # inclui estornos
     mes        = this_month()
     pags_mes   = Pagamento.query.filter(
         Pagamento.tenant_id == tid(),
@@ -351,6 +378,10 @@ def cadastrar():
         tipo_cobranca = request.form.get('tipo_cobranca', 'diaria')
         if not nome:
             flash('Nome obrigatório.', 'error')
+            return redirect(url_for('cadastrar'))
+
+        if check_dup_cadastro(tid(), nome):
+            flash('⚠️ Cadastro duplicado detectado! Aguarde alguns segundos antes de tentar novamente.', 'error')
             return redirect(url_for('cadastrar'))
 
         c = Cliente(
@@ -440,6 +471,9 @@ def pagar(id):
     c = Cliente.query.filter_by(id=id, tenant_id=tid()).first_or_404()
     valor=float(request.form['valor']); obs=request.form.get('obs','').strip()
     if valor<=0: flash('Valor inválido.','error'); return redirect(url_for('dashboard'))
+    if check_dup_pagamento(tid(), id, valor):
+        flash('⚠️ Pagamento duplicado bloqueado! Aguarde 5 segundos antes de confirmar novamente.', 'error')
+        return redirect(url_for('dashboard'))
     if not c.valor_diaria or c.valor_diaria<=0:
         flash('Valor da diária não configurado.','error'); return redirect(url_for('editar',id=id))
     saldo=c.saldo_pendente+valor; diarias_novas=int(saldo//c.valor_diaria)
@@ -461,6 +495,9 @@ def pagar_mensalidade(id):
     c = Cliente.query.filter_by(id=id, tenant_id=tid()).first_or_404()
     valor=float(request.form['valor']); obs=request.form.get('obs','').strip()
     if valor<=0: flash('Valor inválido.','error'); return redirect(url_for('dashboard'))
+    if check_dup_pagamento(tid(), id, valor):
+        flash('⚠️ Pagamento duplicado bloqueado! Aguarde 5 segundos antes de confirmar novamente.', 'error')
+        return redirect(url_for('dashboard'))
     parcela=gerar_parcela_mes(c)
     if not parcela: flash('Erro ao encontrar parcela do mês.','error'); return redirect(url_for('dashboard'))
     parcela.valor_pago=round(parcela.valor_pago+valor,2)
