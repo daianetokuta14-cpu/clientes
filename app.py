@@ -293,7 +293,7 @@ def dashboard():
         Pagamento.tenant_id == tid(),
         Pagamento.data.startswith(mes)
     ).all()
-    total_mes  = sum(p.valor for p in pags_mes if p.valor > 0)
+    total_mes  = sum(p.valor for p in pags_mes)  # inclui estornos
 
     diarias    = [c for c in clientes if c.tipo_cobranca == 'diaria']
     mensais    = [c for c in clientes if c.tipo_cobranca == 'mensalidade']
@@ -508,18 +508,33 @@ def desfazer(pag_id):
     p = Pagamento.query.filter_by(id=pag_id, tenant_id=tid()).first_or_404()
     c = p.cliente
     valor_abs = abs(p.valor)
+    eh_estorno = p.valor < 0  # estorno tem valor negativo
+
     if c.tipo_cobranca == 'diaria':
         diarias_abs = abs(p.diarias or 0)
-        c.diarias_pagas = max(0, c.diarias_pagas - diarias_abs)
-        c.saldo_pendente = max(0.0, c.saldo_pendente - (valor_abs - diarias_abs * c.valor_diaria))
+        if eh_estorno:
+            # Desfazer um estorno = restaurar as diárias e saldo que foram removidos
+            c.diarias_pagas = min(c.total_diarias, c.diarias_pagas + diarias_abs)
+            c.saldo_pendente = round(c.saldo_pendente + (valor_abs - diarias_abs * c.valor_diaria), 2)
+        else:
+            # Desfazer um pagamento normal = remover diárias e saldo
+            c.diarias_pagas = max(0, c.diarias_pagas - diarias_abs)
+            c.saldo_pendente = max(0.0, c.saldo_pendente - (valor_abs - diarias_abs * c.valor_diaria))
     else:
         if p.parcela_id:
             parc = Parcela.query.filter_by(id=p.parcela_id, tenant_id=tid()).first()
             if parc:
-                parc.valor_pago = max(0, round(parc.valor_pago - valor_abs, 2))
-                parc.status = 'aberta' if parc.valor_pago == 0 else 'parcial'
+                if eh_estorno:
+                    # Desfazer estorno = restaurar o valor que foi removido da parcela
+                    parc.valor_pago = round(parc.valor_pago + valor_abs, 2)
+                else:
+                    # Desfazer pagamento normal = subtrair da parcela
+                    parc.valor_pago = max(0, round(parc.valor_pago - valor_abs, 2))
+                parc.status = 'paga' if parc.valor_pago >= parc.valor else ('aberta' if parc.valor_pago == 0 else 'parcial')
+
     db.session.delete(p); db.session.commit()
-    flash(f'Pagamento de R$ {valor_abs:.2f} removido de {c.nome}.', 'warn')
+    acao = 'Estorno' if eh_estorno else 'Pagamento'
+    flash(f'{acao} de R$ {valor_abs:.2f} desfeito de {c.nome}.', 'warn')
     return redirect(url_for('editar', id=c.id))
 
 
@@ -562,7 +577,7 @@ def gerar_link(id):
 @login_required
 def resumo():
     todos_pags=Pagamento.query.filter_by(tenant_id=tid()).order_by(Pagamento.data.desc(),Pagamento.criado_em.desc()).all()
-    meses=sorted(set(p.data[:7] for p in todos_pags if p.valor>0),reverse=True)
+    meses=sorted(set(p.data[:7] for p in todos_pags),reverse=True)
     mes_sel=request.args.get('mes',''); busca_nome=request.args.get('q','').strip().lower(); busca_dia=request.args.get('dia','').strip()
     dia_iso=''
     if busca_dia:
@@ -574,7 +589,7 @@ def resumo():
         except: dia_iso=''
     modo_geral=bool(busca_nome or dia_iso)
     if not mes_sel and not modo_geral: mes_sel=meses[0] if meses else this_month()
-    pags_filtrados=[p for p in todos_pags if p.valor>0]
+    pags_filtrados=list(todos_pags)  # inclui estornos
     if not modo_geral and mes_sel: pags_filtrados=[p for p in pags_filtrados if p.data.startswith(mes_sel)]
     if dia_iso: pags_filtrados=[p for p in pags_filtrados if p.data==dia_iso]
     todos_clientes=Cliente.query.filter_by(tenant_id=tid()).all()
