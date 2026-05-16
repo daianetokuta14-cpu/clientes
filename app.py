@@ -611,6 +611,15 @@ def resumo():
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Login seguro do admin — sem key na URL."""
+    # Salva params do novo cliente na sessão para preencher automaticamente
+    novo_email = request.args.get('email', '')
+    novo_nome  = request.args.get('nome', '')
+    novo_wpp   = request.args.get('wpp', '')
+    if novo_email:
+        session['novo_cliente_email'] = novo_email
+        session['novo_cliente_nome']  = novo_nome
+        session['novo_cliente_wpp']   = novo_wpp
+
     if session.get('admin_logado'):
         return redirect(url_for('admin_index'))
     error = None
@@ -641,7 +650,13 @@ def admin_index():
     stats = {}
     for t in tenants:
         stats[t.id] = Cliente.query.filter_by(tenant_id=t.id, ativo=True).count()
-    return render_template('admin_tenants.html', tenants=tenants, stats=stats)
+    # Dados do novo cliente vindos da landing page
+    novo = {
+        'email': session.pop('novo_cliente_email', ''),
+        'nome':  session.pop('novo_cliente_nome', ''),
+        'wpp':   session.pop('novo_cliente_wpp', ''),
+    }
+    return render_template('admin_tenants.html', tenants=tenants, stats=stats, novo=novo)
 
 
 @app.route('/admin/criar', methods=['POST'])
