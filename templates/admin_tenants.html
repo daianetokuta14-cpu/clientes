@@ -62,8 +62,8 @@ details[open]{margin-top:0.3rem}
 <!-- Criar novo tenant -->
 <div class="section">
   <h2>➕ Criar novo tenant</h2>
-  <form method="post" action="/admin/criar?key={{ key }}">
-    <input type="hidden" name="key" value="{{ key }}">
+  <form method="post" action="/admin/criar">
+    
     <div class="form-row">
       <div>
         <label>Nome / empresa</label>
@@ -110,8 +110,8 @@ details[open]{margin-top:0.3rem}
         </div>
         <details>
           <summary>Alterar senha</summary>
-          <form method="post" action="/admin/senha/{{ t.id }}?key={{ key }}" class="senha-inline" style="margin-top:0.4rem;display:flex;gap:0.3rem">
-            <input type="hidden" name="key" value="{{ key }}">
+          <form method="post" action="/admin/senha/{{ t.id }}" class="senha-inline" style="margin-top:0.4rem;display:flex;gap:0.3rem">
+            
             <input type="text" name="nova_senha" placeholder="nova senha">
             <button type="submit" class="btn btn-sm btn-success">Salvar</button>
           </form>
@@ -119,19 +119,19 @@ details[open]{margin-top:0.3rem}
       </div>
       <div class="actions">
         {% if t.status == 'ativo' %}
-        <form method="post" action="/admin/pausar/{{ t.id }}?key={{ key }}" class="inline-form">
-          <input type="hidden" name="key" value="{{ key }}">
+        <form method="post" action="/admin/pausar/{{ t.id }}" class="inline-form">
+          
           <button type="submit" class="btn btn-sm btn-warn"
             onclick="return confirm('Pausar {{ t.nome }}?')">⏸ Pausar</button>
         </form>
         {% else %}
-        <form method="post" action="/admin/ativar/{{ t.id }}?key={{ key }}" class="inline-form">
-          <input type="hidden" name="key" value="{{ key }}">
+        <form method="post" action="/admin/ativar/{{ t.id }}" class="inline-form">
+          
           <button type="submit" class="btn btn-sm btn-success">▶ Reativar</button>
         </form>
         {% endif %}
-        <form method="post" action="/admin/deletar/{{ t.id }}?key={{ key }}" class="inline-form">
-          <input type="hidden" name="key" value="{{ key }}">
+        <form method="post" action="/admin/deletar/{{ t.id }}" class="inline-form">
+          
           <button type="submit" class="btn btn-sm btn-danger"
             onclick="return confirm('DELETAR {{ t.nome }} e TODOS os dados? Esta ação é irreversível!')">🗑 Deletar</button>
         </form>
