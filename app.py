@@ -53,33 +53,6 @@ def check_rate_limit(ip):
 def reset_rate_limit(ip):
     _login_attempts.pop(ip, None)
 
-# ── Anti-duplicação ────────────────────────────────────────────
-_ultimos_pagamentos = {}   # chave: (tenant_id, cliente_id, valor) → timestamp
-_ultimos_cadastros  = {}   # chave: (tenant_id, nome_lower) → timestamp
-JANELA_PAG  = 5    # segundos
-JANELA_CAD  = 10   # segundos
-
-def check_dup_pagamento(tenant_id, cliente_id, valor):
-    """Retorna True se este pagamento é duplicata (mesmo tenant+cliente+valor nos últimos 5s)."""
-    chave = (tenant_id, cliente_id, round(float(valor), 2))
-    agora = time.time()
-    ultimo = _ultimos_pagamentos.get(chave)
-    if ultimo and agora - ultimo < JANELA_PAG:
-        return True
-    _ultimos_pagamentos[chave] = agora
-    return False
-
-def check_dup_cadastro(tenant_id, nome):
-    """Retorna True se este cadastro é duplicata (mesmo tenant+nome nos últimos 10s)."""
-    chave = (tenant_id, nome.strip().lower())
-    agora = time.time()
-    ultimo = _ultimos_cadastros.get(chave)
-    if ultimo and agora - ultimo < JANELA_CAD:
-        return True
-    _ultimos_cadastros[chave] = agora
-    return False
-
-
 db.init_app(app)
 
 with app.app_context():
@@ -210,9 +183,8 @@ def api_key_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        key = request.args.get('key') or request.form.get('key') or request.headers.get('X-Admin-Key', '')
-        if not ADMIN_KEY or key != ADMIN_KEY:
-            return 'Acesso negado', 403
+        if not session.get('admin_logado'):
+            return redirect(url_for('admin_login'))
         return f(*args, **kwargs)
     return decorated
 
@@ -314,7 +286,7 @@ def dashboard():
             gerar_parcela_mes(c)
 
     pags_hoje  = Pagamento.query.filter_by(tenant_id=tid(), data=today()).all()
-    total_hoje = sum(p.valor for p in pags_hoje)  # inclui estornos
+    total_hoje = sum(p.valor for p in pags_hoje if p.valor > 0)
     mes        = this_month()
     pags_mes   = Pagamento.query.filter(
         Pagamento.tenant_id == tid(),
@@ -378,10 +350,6 @@ def cadastrar():
         tipo_cobranca = request.form.get('tipo_cobranca', 'diaria')
         if not nome:
             flash('Nome obrigatório.', 'error')
-            return redirect(url_for('cadastrar'))
-
-        if check_dup_cadastro(tid(), nome):
-            flash('⚠️ Cadastro duplicado detectado! Aguarde alguns segundos antes de tentar novamente.', 'error')
             return redirect(url_for('cadastrar'))
 
         c = Cliente(
@@ -471,9 +439,6 @@ def pagar(id):
     c = Cliente.query.filter_by(id=id, tenant_id=tid()).first_or_404()
     valor=float(request.form['valor']); obs=request.form.get('obs','').strip()
     if valor<=0: flash('Valor inválido.','error'); return redirect(url_for('dashboard'))
-    if check_dup_pagamento(tid(), id, valor):
-        flash('⚠️ Pagamento duplicado bloqueado! Aguarde 5 segundos antes de confirmar novamente.', 'error')
-        return redirect(url_for('dashboard'))
     if not c.valor_diaria or c.valor_diaria<=0:
         flash('Valor da diária não configurado.','error'); return redirect(url_for('editar',id=id))
     saldo=c.saldo_pendente+valor; diarias_novas=int(saldo//c.valor_diaria)
@@ -495,9 +460,6 @@ def pagar_mensalidade(id):
     c = Cliente.query.filter_by(id=id, tenant_id=tid()).first_or_404()
     valor=float(request.form['valor']); obs=request.form.get('obs','').strip()
     if valor<=0: flash('Valor inválido.','error'); return redirect(url_for('dashboard'))
-    if check_dup_pagamento(tid(), id, valor):
-        flash('⚠️ Pagamento duplicado bloqueado! Aguarde 5 segundos antes de confirmar novamente.', 'error')
-        return redirect(url_for('dashboard'))
     parcela=gerar_parcela_mes(c)
     if not parcela: flash('Erro ao encontrar parcela do mês.','error'); return redirect(url_for('dashboard'))
     parcela.valor_pago=round(parcela.valor_pago+valor,2)
@@ -646,21 +608,45 @@ def resumo():
 # URL: /admin?key=SUA_CHAVE
 # ══════════════════════════════════════════════════════════════
 
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Login seguro do admin — sem key na URL."""
+    if session.get('admin_logado'):
+        return redirect(url_for('admin_index'))
+    error = None
+    if request.method == 'POST':
+        ip = request.remote_addr
+        if check_rate_limit(ip):
+            error = f'Muitas tentativas. Aguarde {JANELA_SEGUNDOS // 60} minutos.'
+            return render_template('admin_login.html', error=error)
+        senha = request.form.get('senha', '')
+        if not ADMIN_KEY or senha != ADMIN_KEY:
+            error = 'Senha incorreta.'
+            return render_template('admin_login.html', error=error)
+        reset_rate_limit(ip)
+        session['admin_logado'] = True
+        session.permanent = False
+        return redirect(url_for('admin_index'))
+    return render_template('admin_login.html', error=error)
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logado', None)
+    return redirect(url_for('admin_login'))
+
 @app.route('/admin')
 @admin_required
 def admin_index():
     tenants = Tenant.query.order_by(Tenant.criado_em.desc()).all()
-    key = request.args.get('key', '')
     stats = {}
     for t in tenants:
         stats[t.id] = Cliente.query.filter_by(tenant_id=t.id, ativo=True).count()
-    return render_template('admin_tenants.html', tenants=tenants, stats=stats, key=key)
+    return render_template('admin_tenants.html', tenants=tenants, stats=stats)
 
 
 @app.route('/admin/criar', methods=['POST'])
 @admin_required
 def admin_criar_tenant():
-    key   = request.form.get('key', '')
     nome  = request.form.get('nome', '').strip()
     email = request.form.get('email', '').strip().lower()
     senha = request.form.get('senha', '').strip()
@@ -668,57 +654,53 @@ def admin_criar_tenant():
 
     if not nome or not email or not senha:
         flash('Nome, e-mail e senha são obrigatórios.', 'error')
-        return redirect(url_for('admin_index', key=key))
+        return redirect(url_for('admin_index'))
     if Tenant.query.filter_by(email=email).first():
         flash('E-mail já cadastrado.', 'error')
-        return redirect(url_for('admin_index', key=key))
+        return redirect(url_for('admin_index'))
 
     t = Tenant(nome=nome, email=email, wpp_suporte=wpp)
     t.set_senha(senha)
     db.session.add(t); db.session.commit()
     flash(f'Tenant "{nome}" criado com sucesso!', 'success')
-    return redirect(url_for('admin_index', key=key))
+    return redirect(url_for('admin_index'))
 
 
 @app.route('/admin/pausar/<int:tid_>', methods=['POST'])
 @admin_required
 def admin_pausar(tid_):
-    key = request.form.get('key', '')
     t = Tenant.query.get_or_404(tid_)
     t.status = 'pausado'
     db.session.commit()
     flash(f'"{t.nome}" pausado.', 'warn')
-    return redirect(url_for('admin_index', key=key))
+    return redirect(url_for('admin_index'))
 
 
 @app.route('/admin/ativar/<int:tid_>', methods=['POST'])
 @admin_required
 def admin_ativar(tid_):
-    key = request.form.get('key', '')
     t = Tenant.query.get_or_404(tid_)
     t.status = 'ativo'
     db.session.commit()
     flash(f'"{t.nome}" reativado!', 'success')
-    return redirect(url_for('admin_index', key=key))
+    return redirect(url_for('admin_index'))
 
 
 @app.route('/admin/senha/<int:tid_>', methods=['POST'])
 @admin_required
 def admin_senha(tid_):
-    key   = request.form.get('key', '')
     nova  = request.form.get('nova_senha', '').strip()
     t = Tenant.query.get_or_404(tid_)
     if nova:
         t.set_senha(nova)
         db.session.commit()
         flash(f'Senha de "{t.nome}" atualizada.', 'success')
-    return redirect(url_for('admin_index', key=key))
+    return redirect(url_for('admin_index'))
 
 
 @app.route('/admin/deletar/<int:tid_>', methods=['POST'])
 @admin_required
 def admin_deletar(tid_):
-    key = request.form.get('key', '')
     t = Tenant.query.get_or_404(tid_)
     nome = t.nome
     # Remove todos os dados do tenant em cascata
@@ -729,7 +711,7 @@ def admin_deletar(tid_):
     db.session.delete(t)
     db.session.commit()
     flash(f'Tenant "{nome}" e todos seus dados foram deletados.', 'warn')
-    return redirect(url_for('admin_index', key=key))
+    return redirect(url_for('admin_index'))
 
 
 # ══════════════════════════════════════════════════════════════
