@@ -67,11 +67,11 @@ details[open]{margin-top:0.3rem}
     <div class="form-row">
       <div>
         <label>Nome / empresa</label>
-        <input type="text" name="nome" placeholder="Ex: João Silva" required>
+        <input type="text" name="nome" value="{{ novo.nome }}" placeholder="Ex: João Silva" placeholder="Ex: João Silva" required>
       </div>
       <div>
         <label>E-mail de acesso</label>
-        <input type="email" name="email" placeholder="joao@email.com" required>
+        <input type="email" name="email" value="{{ novo.email }}" placeholder="joao@email.com" placeholder="joao@email.com" required>
       </div>
       <div>
         <label>Senha inicial</label>
@@ -79,7 +79,7 @@ details[open]{margin-top:0.3rem}
       </div>
       <div>
         <label>WhatsApp suporte</label>
-        <input type="text" name="wpp" placeholder="5511999999999">
+        <input type="text" name="wpp" value="{{ novo.wpp }}" placeholder="5511999999999" placeholder="5511999999999">
       </div>
       <div style="display:flex;align-items:flex-end">
         <button type="submit" class="btn btn-primary" style="width:100%;height:42px">Criar</button>
