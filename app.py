@@ -1,4 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+import secrets as _secrets_mod
+import ssl, json
+from urllib.request import urlopen, Request as URLRequest
 from models import db, Tenant, Cliente, Pagamento, ContratoHistorico, Parcela
 from datetime import date, datetime
 from functools import wraps
@@ -32,7 +35,64 @@ PINS = {
 
 BOT_API_KEY = os.environ.get('BOT_API_KEY', '')
 ADMIN_KEY   = os.environ.get('ADMIN_KEY', '')    # sua chave secreta de admin
-WPP_SUPORTE = os.environ.get('WPP_SUPORTE', '')  # seu número padrão de suporte
+WPP_SUPORTE   = os.environ.get('WPP_SUPORTE', '')
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
+FROM_EMAIL    = 'megacredito11@gmail.com'
+FROM_NAME     = 'Megacredito'
+
+def enviar_email_acesso(dest, nome, senha):
+    """Envia email com credenciais de acesso ao novo cliente."""
+    if not BREVO_API_KEY:
+        return False
+    html = f'''
+    <div style="background:#080808;padding:48px 32px;font-family:sans-serif;color:#fff;max-width:600px;margin:auto;">
+      <div style="font-size:28px;letter-spacing:8px;font-weight:900;margin-bottom:4px;">
+        MEGA<span style="color:#C9A227;">CREDITO</span>
+      </div>
+      <div style="font-size:11px;letter-spacing:4px;color:#444;margin-bottom:40px;">SISTEMA DE GESTAO DE CREDITO</div>
+      <h2 style="font-size:22px;color:#C9A227;margin-bottom:16px;">Acesso liberado, {nome}!</h2>
+      <p style="color:#aaa;line-height:1.7;margin-bottom:32px;">
+        Seu pagamento foi confirmado e seu acesso ao sistema esta ativo.<br>
+        Use as credenciais abaixo para entrar:
+      </p>
+      <div style="background:#111;border:1px solid #222;border-radius:4px;padding:24px 32px;margin-bottom:32px;">
+        <div style="font-size:11px;letter-spacing:4px;color:#C9A227;margin-bottom:16px;">SUAS CREDENCIAIS</div>
+        <table style="width:100%;font-size:14px;color:#aaa;line-height:2.2;">
+          <tr><td style="color:#555;width:80px;">Login</td><td style="color:#fff;">{dest}</td></tr>
+          <tr><td style="color:#555;">Senha</td><td style="color:#fff;font-size:18px;letter-spacing:2px;">{senha}</td></tr>
+        </table>
+      </div>
+      <a href="https://app.megacredito.app.br/acesso" style="display:inline-block;background:#C9A227;color:#000;
+         font-weight:700;font-size:14px;letter-spacing:4px;padding:16px 36px;border-radius:3px;text-decoration:none;margin-bottom:32px;">
+        ACESSAR O SISTEMA
+      </a>
+      <p style="color:#555;font-size:12px;line-height:1.7;">
+        Guarde sua senha em local seguro.<br>
+        Duvidas? <a href="mailto:megacredito11@gmail.com" style="color:#C9A227;">megacredito11@gmail.com</a>
+      </p>
+      <div style="margin-top:40px;border-top:1px solid #1a1a1a;padding-top:20px;font-size:11px;letter-spacing:3px;color:#333;">
+        MEGACREDITO - TECNOLOGIA PARA QUEM QUER CRESCER
+      </div>
+    </div>'''
+    try:
+        payload = json.dumps({
+            "sender":      {"name": FROM_NAME, "email": FROM_EMAIL},
+            "to":          [{"email": dest}],
+            "subject":     "Acesso liberado — Megacredito",
+            "htmlContent": html,
+        }).encode("utf-8")
+        ctx = ssl.create_default_context()
+        req = URLRequest(
+            "https://api.brevo.com/v3/smtp/email",
+            data=payload,
+            headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, context=ctx, timeout=10) as resp:
+            return resp.status < 300
+    except Exception as e:
+        print(f"[EMAIL] erro: {e}")
+        return False
 
 _login_attempts = {}
 MAX_TENTATIVAS  = 5
@@ -664,20 +724,29 @@ def admin_index():
 def admin_criar_tenant():
     nome  = request.form.get('nome', '').strip()
     email = request.form.get('email', '').strip().lower()
-    senha = request.form.get('senha', '').strip()
     wpp   = request.form.get('wpp', '').strip() or WPP_SUPORTE
 
-    if not nome or not email or not senha:
-        flash('Nome, e-mail e senha são obrigatórios.', 'error')
+    if not nome or not email:
+        flash('Nome e e-mail são obrigatórios.', 'error')
         return redirect(url_for('admin_index'))
     if Tenant.query.filter_by(email=email).first():
         flash('E-mail já cadastrado.', 'error')
         return redirect(url_for('admin_index'))
 
+    # Gera senha forte automaticamente
+    senha = _secrets_mod.token_urlsafe(10)
+
     t = Tenant(nome=nome, email=email, wpp_suporte=wpp)
     t.set_senha(senha)
     db.session.add(t); db.session.commit()
-    flash(f'Tenant "{nome}" criado com sucesso!', 'success')
+
+    # Envia email com as credenciais para o cliente
+    enviado = enviar_email_acesso(email, nome, senha)
+    if enviado:
+        flash(f'✅ Tenant "{nome}" criado! Email com credenciais enviado para {email}.', 'success')
+    else:
+        flash(f'✅ Tenant "{nome}" criado! Senha: {senha} (email não enviado — verifique BREVO_API_KEY).', 'success')
+
     return redirect(url_for('admin_index'))
 
 
